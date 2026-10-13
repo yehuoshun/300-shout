@@ -1,0 +1,29 @@
+{
+  "capture": {
+    "mode": "dxcam",
+    "output_idx": 0,
+    "fps": 10
+  },
+  "roi": {
+    "left": 0,
+    "top": 0,
+    "right": 0,
+    "bottom": 0
+  },
+  "detect": {
+    "threshold": 0.8,
+    "lock_seconds": 3.0
+  },
+  "chat": {
+    "open_key": "enter",
+    "channel_keys": [],
+    "type_delay": 0.08,
+    "enter_delay": 0.15
+  },
+  "phrases": [
+    "台词一：R键已点燃",
+    "台词二：大招伺候"
+  ],
+  "min_interval": 1.5,
+  "max_interval": 3.0
+}
