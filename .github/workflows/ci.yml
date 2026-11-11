@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  start-test:
+    name: 启动自检（Linux / headless）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+      - name: 语法编译检查
+        run: python -m compileall -q .
+      - name: 单元测试
+        run: python -m pytest -q
+      - name: 启动自检（不接触显示器/键盘）
+        run: python main.py --self-test
+
+  windows-deps:
+    name: Windows 依赖链（dxcam / pydirectinput）
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+      - name: 导入检查（真 Windows 依赖）
+        run: python -c "import dxcam, pydirectinput, cv2, mss, numpy; print('imports OK')"
+      - name: 单元测试
+        run: python -m pytest -q
+      - name: 启动自检
+        run: python main.py --self-test

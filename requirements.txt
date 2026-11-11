@@ -1,0 +1,8 @@
+# 跨平台依赖：Windows 上装 dxcam/pydirectinput（真抓屏+发键），
+# 其它平台自动跳过，仅装可用于测试/自检的部分。
+numpy>=1.24
+mss>=9.0
+opencv-python ; sys_platform == "win32"
+opencv-python-headless ; sys_platform != "win32"
+dxcam ; sys_platform == "win32"
+pydirectinput ; sys_platform == "win32"
