@@ -143,7 +143,8 @@ def test_calibrate_offline_roundtrip(tmp_path):
 # ------------------------------------------------------------ 端到端启动自检
 def test_self_test_subprocess():
     r = subprocess.run([sys.executable, "main.py", "--self-test"],
-                       cwd=ROOT, capture_output=True, text=True, timeout=120)
+                       cwd=ROOT, capture_output=True, text=True,
+                       encoding="utf-8", errors="replace", timeout=120)
     assert r.returncode == 0, r.stdout + r.stderr
     assert "SELF-TEST OK" in r.stdout
 
