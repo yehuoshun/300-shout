@@ -180,7 +180,17 @@ def self_test() -> int:
 
 
 # ---------------------------------------------------------------- 入口
+def _force_utf8_stdio() -> None:
+    """Windows 控制台默认用 ANSI 代码页，中文/emoji 会 UnicodeEncodeError。统一为 UTF-8。"""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def main(argv=None) -> int:
+    _force_utf8_stdio()
     ap = argparse.ArgumentParser(description="300英雄 开大自动公屏喊话（图像识别）")
     ap.add_argument("--config", default=DEFAULT_CONFIG, help="配置文件路径")
     ap.add_argument("--log-level", default="INFO", help="日志级别")
