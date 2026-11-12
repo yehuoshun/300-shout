@@ -94,6 +94,7 @@
   都落这儿），`bundle_dir()` = 解包目录（只读的内置默认配置）；`ensure_config()` 首次运行把内置配置
   释放到 exe 旁边。原因：onefile 下 `__file__` 指向临时解包目录，进程退出即删——照旧写法会让用户
   改过的配置"下次启动就丢"。
+- **已发版**：v3.0.0（2026-11-12，Release run 43155913157 全绿）→ https://github.com/yehuoshun/300-shout/releases/tag/v3.0.0 ，资产：`300-Shout.exe`（62MB）、`300-Shout.exe.sha256`、`300-Shout-windows-x64.zip`（exe + 默认配置 + 首验清单）。
 - **标定也在 exe 里**：`--calibrate` / `--calibrate-check` 转发到 `calibrate.main()`，
   打包版用户不需要装 Python。`calibrate.py` 自己不再算路径，统一 `from paths import`。
 
