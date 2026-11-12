@@ -41,10 +41,10 @@ jobs:
 
       - name: PyInstaller 打包（单文件）
         # --collect-submodules dxcam：dxcam 的后端是动态导入，静态分析抓不到
-        # --add-data config.json：内置一份默认配置，首次运行释放到 exe 旁边
+        # --add-data config/config.json：内置一份默认配置，首次运行释放到 exe 旁的 config/ 里
         run: >
           pyinstaller --noconfirm --clean --onefile --name 300-Shout
-          --add-data "config.json;."
+          --add-data "config/config.json;config"
           --collect-submodules dxcam
           --log-level WARN
           main.py
@@ -65,7 +65,7 @@ jobs:
         run: |
           $hash = (Get-FileHash dist\300-Shout.exe -Algorithm SHA256).Hash.ToLower()
           "$hash  300-Shout.exe" | Out-File -Encoding ascii dist\300-Shout.exe.sha256
-          Compress-Archive -Path dist\300-Shout.exe, config.json, docs\FIRST_RUN.md `
+          Compress-Archive -Path dist\300-Shout.exe, config, docs\FIRST_RUN.md `
             -DestinationPath dist\300-Shout-windows-x64.zip -Force
           Get-ChildItem dist | Select-Object Name, Length | Format-Table
 
@@ -95,7 +95,8 @@ jobs:
 
             ## 怎么用
             1. 下载 `300-Shout.exe`，放到一个**自己有写权限的固定目录**（例如 `D:\Tools\300-Shout\`），双击运行。
-               首次启动会在 exe 旁边生成 `config.json` 和 `logs\`；配置和标定结果都存在这里，别把 exe 放在只读目录或临时目录。
+               首次启动会在 exe 旁边生成一个 `config\` 文件夹（`config.json` + `refs\` 基准图 + `logs\` 日志）；
+               配置和标定结果都在这里，换 exe 升级时别把它删了。别把 exe 放在只读目录或临时目录。
             2. 按 `docs/FIRST_RUN.md` 的 8 步走：`--list-windows` 找游戏窗口标题 → 填 `chat.foreground_titles` →
                切到游戏 `--check-guard` 期望「通过」→ `calibrate.py` 框选大招 R 槽 → `--dry-run --stats 10` 观察触发 →
                `--test-send "测试一下"` 验证发送 → 频道实测 → 正式 `main.py`。
