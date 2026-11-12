@@ -82,18 +82,21 @@
 
 ### 3.5 日志
 
-- `logsetup.setup_logging()`：控制台 + 文件（`logs/300-shout.log`，2MB × 3 轮转）
+- `logsetup.setup_logging()`：控制台 + 文件（`config/logs/300-shout.log`，2MB × 3 轮转）
 - 各模块用 `logging.getLogger("300-shout.<模块>")`，统一挂父 logger
 
 ### 3.6 打包与路径
 
 - **发版**：推 `v*` tag（或手动触发）→ `.github/workflows/release.yml` 在 windows-latest 上跑
-  PyInstaller 单文件打包（`--onefile --add-data "config.json;." --collect-submodules dxcam`）→
+  PyInstaller 单文件打包（`--onefile --add-data "config/config.json;config" --collect-submodules dxcam`）→
   用 `exe --self-test` 冒烟 → 发 Release（附 `.sha256` 与 `windows-x64.zip`）。手动触发只上传 artifact。
-- **路径规则集中在 `paths.py`**：冻结后 `app_root()` = **exe 所在目录**（`config.json` / `refs/` / `logs/`
-  都落这儿），`bundle_dir()` = 解包目录（只读的内置默认配置）；`ensure_config()` 首次运行把内置配置
-  释放到 exe 旁边。原因：onefile 下 `__file__` 指向临时解包目录，进程退出即删——照旧写法会让用户
-  改过的配置"下次启动就丢"。
+- **路径规则集中在 `paths.py`**：冻结后 `app_root()` = **exe 所在目录**，`bundle_dir()` = 解包目录
+  （只读的内置默认配置）；`layout()` 决定用户数据落点——默认 `<根>/config/{config.json,refs,logs}`，
+  若根目录直接有老版本的 `config.json` 且新位置还没有配置，则沿用老位置（升级后不会突然"未标定"）。
+  `dirs_for(config_path)` 让 refs/logs 跟着配置文件走，`--config` 指到别处也不会拿错基准图。
+  `ensure_config()` 首次运行把内置配置释放到 `config/config.json`（顺带建目录）。
+  原因：onefile 下 `__file__` 指向临时解包目录，进程退出即删——照旧写法会让用户改过的配置"下次启动就丢"；
+  而把四五个文件摊在 exe 旁边，换 exe 升级时容易漏、也容易被误删。
 - **已发版**：v3.0.0（2026-11-12，Release run 43155913157 全绿）→ https://github.com/yehuoshun/300-shout/releases/tag/v3.0.0 ，资产：`300-Shout.exe`（62MB）、`300-Shout.exe.sha256`、`300-Shout-windows-x64.zip`（exe + 默认配置 + 首验清单）。
 - **标定也在 exe 里**：`--calibrate` / `--calibrate-check` 转发到 `calibrate.main()`，
   打包版用户不需要装 Python。`calibrate.py` 自己不再算路径，统一 `from paths import`。
@@ -102,7 +105,7 @@
   （`_tkinter.pyd`、`tcl86t.dll`、`tcl_data/`）一起打了进去。**不需要** `--hidden-import ui`：
   `main._launch_ui()` 里那句函数内 `import ui` 同样会被 PyInstaller 静态分析捕获，本地与 CI 用同一组
   参数即可；验证方式是 `Analysis-00.toc` 里能查到 `ui` / `tkinter` / `_tkinter.pyd`。
-  冻结后的面板实测：双击无参数即开窗，配置路径显示为 exe 旁的 `config.json`。
+  冻结后的面板实测：双击无参数即开窗，配置路径显示为 exe 旁的 `config/config.json`。
 
 ## 4. 待办（接手者第一件事）
 
@@ -156,7 +159,7 @@
 | `logsetup.py` | ✅ | 日志系统 |
 | `paths.py` | ✅ | 路径规则：源码/exe 两套根目录，`ensure_config` 首次释放默认配置 |
 | `requirements*.txt` | ✅ | 跨平台依赖（Windows 标记） |
-| `tests/test_smoke.py` | ✅ | 72 个离线冒烟测试（面板菜单那 1 项本机真窗口跑，CI 跳过） |
+| `tests/test_smoke.py` | ✅ | 76 个离线冒烟测试（面板下拉那 1 项本机真窗口跑，CI 跳过） |
 | `.github/workflows/ci.yml` | ✅ | CI：Linux 启动自检 + Windows 依赖链 |
 | `.github/workflows/release.yml` | ✅ | 推 `v*` tag 打单文件 exe 并发布到 Releases |
 | `README.md` | ✅ | 用户文档（含安全护栏/参数表/排错表） |

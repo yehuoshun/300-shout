@@ -14,7 +14,7 @@
 - 自动打开聊天框发送台词（支持频道切换序列配置）
 - 台词池随机（避免连续重复）+ 随机发送间隔，防机械节奏
 - 一键标定：框选大招图标区域，自动采集基准图并写入配置
-- 控制台 + 文件日志（`logs/`，按大小轮转）
+- 控制台 + 文件日志（`config/logs/`，按大小轮转）
 - **安全护栏（v3）**：前台窗口校验（游戏不在前台绝不发键）、`--dry-run` 演练、F8/F9 全局热键
 
 ## 安全设计（v3 重点）
@@ -50,7 +50,7 @@ flowchart TD
 | 安全 | `guard.py` | 前台窗口标题校验 + 全局热键（纯 ctypes，无新依赖；非 Windows 安全降级） |
 | 发送 | `sender.py` | 模拟键盘聊天链路；`unicode` / `clipboard` 两种输入法 |
 | 标定 | `calibrate.py` | 截图 → 框选图标 → 采集基准 → 写配置；带 `--check` 体检 |
-| 日志 | `logsetup.py` | 控制台 + 文件（`logs/`，2MB 轮转 ×3） |
+| 日志 | `logsetup.py` | 控制台 + 文件（`config/logs/`，2MB 轮转 ×3） |
 | 入口 | `main.py` | 主循环：捕获→检测→守卫→发送 + 日志/统计/热键 |
 
 ## 图形面板（v3.2 起，推荐）
@@ -89,7 +89,7 @@ flowchart TD
 - **实时分数**：`大招待命 ready` 与 `冷却中 cd` 两个大数字 + 进度条，阈值刻度直接画在条上
 - **一键标定**：点「标定 R 槽」框选游戏里的大招图标，标完自动重新读配置
 - **台词池编辑**：增删台词，直接写回 `config.json`（其余配置键原样保留）
-- **运行日志**：和 `logs/300-shout.log` 同步滚动，时间 / 级别 / 内容分色，超过 400 行自动裁旧
+- **运行日志**：和 `config/logs/300-shout.log` 同步滚动，时间 / 级别 / 内容分色，超过 400 行自动裁旧
 - **发送测试**：单独验一次聊天链路，不用等开大
 - **四套外观**：右上角「外观」切换（简洁浅/深、电竞霓虹、纸感米白），选完写回 `config.json`
 
@@ -104,13 +104,14 @@ flowchart TD
 不想装 Python 的话，直接去 [Releases](https://github.com/yehuoshun/300-shout/releases/latest) 下
 `300-Shout.exe`（单文件，Windows x64）：
 
-1. 放进**自己有写权限的固定目录**（例如 `D:\Tools\300-Shout\`）——首次运行会在 exe 旁边生成
-   `config.json` 和 `logs\`，配置和标定结果都存在这里；放临时目录或只读目录会丢配置。
+1. 放进**自己有写权限的固定目录**（例如 `D:\Tools\300-Shout\`）——首次运行会在 exe 旁边建出
+   `config\` 文件夹（`config.json` + `refs\` 基准图 + `logs\` 日志），配置和标定结果都存在这里；
+   放临时目录或只读目录会丢配置。升级时只换 exe，别删 `config\`。
 2. **双击 exe 就开控制面板**（见上一节）。想用命令行，参数与源码版完全一致，
    把 `.venv\Scripts\python.exe main.py` 换成 `300-Shout.exe` 即可：
    `300-Shout.exe --list-windows`、`300-Shout.exe --check-guard`、`300-Shout.exe --self-test`。
 3. 标定也在 exe 里：`300-Shout.exe --calibrate`（框选大招图标）→ `300-Shout.exe --calibrate-check`
-   （体检）。标定完 `refs\` 和 `config.json` 就在 exe 旁边。
+   （体检）。标定完 `config.json` 与 `refs\` 都在 exe 旁的 `config\` 里。
 
 > exe 用 PyInstaller 打包、未签名，个别杀软会误报；介意就用源码跑。
 > 自动自检（`--self-test`）在 CI 里跑过，**游戏内实际喊话仍需你本地按 [docs/FIRST_RUN.md](docs/FIRST_RUN.md) 验**。
@@ -120,7 +121,7 @@ flowchart TD
 ```bash
 .venv\Scripts\python.exe -m pip install pyinstaller
 .venv\Scripts\python.exe -m PyInstaller --noconfirm --clean --onefile --name 300-Shout ^
-    --add-data "config.json;." --collect-submodules dxcam main.py
+    --add-data "config/config.json;config" --collect-submodules dxcam main.py
 ```
 
 > `--add-data` 把默认配置塞进 exe（首次运行释放到 exe 旁）；`--collect-submodules dxcam` 是必须的，
@@ -278,7 +279,7 @@ pip install -r requirements.txt      # Windows 自动带上 dxcam / pydirectinpu
 ```text
 300-shout/
 ├── main.py            # 入口：主循环 + 日志 + 统计 + 自检
-├── paths.py           # 路径规则：源码/exe 两套根目录（配置/refs/logs 落在 exe 旁）
+├── paths.py           # 路径规则：源码/exe 两套根目录，用户数据统一收进 <根>/config/
 ├── capture.py         # 画面层：dxcam/mss（非阻塞 + 末帧缓存）
 ├── detect.py          # 检测层：模板匹配 + 多帧确认 + 下降沿
 ├── guard.py           # 安全层：前台窗口校验 + 全局热键
@@ -286,11 +287,12 @@ pip install -r requirements.txt      # Windows 自动带上 dxcam / pydirectinpu
 ├── ui.py              # 图形控制面板（Tkinter，关窗即退；纯逻辑可离线测）
 ├── calibrate.py       # 标定工具 + 体检
 ├── logsetup.py        # 日志系统
-├── config.json        # 全部可调参数
+├── config/            # 用户数据目录（运行时自动建子目录）
+│   ├── config.json    #   全部可调参数
+│   ├── refs/          #   标定基准图（gitignore）
+│   └── logs/          #   运行日志（gitignore）
 ├── requirements*.txt  # 运行 / 测试依赖
 ├── AGENTS.md          # 开发约束（红线 / 分层 / 必跑检查 / 已知坑）
-├── refs/              # 标定生成的基准图（gitignore）
-├── logs/              # 运行日志（gitignore）
 ├── tests/             # 冒烟测试（离线）
 └── .github/workflows/ # CI（ci.yml 测试 / release.yml 打 tag 出 exe）
 ```
@@ -300,7 +302,7 @@ pip install -r requirements.txt      # Windows 自动带上 dxcam / pydirectinpu
 ```bash
 python -m venv .venv
 .venv/Scripts/python.exe -m pip install -r requirements.txt -r requirements-dev.txt   # Windows
-.venv/Scripts/python.exe -m pytest -q            # 72 个冒烟测试（离线，< 2s；面板菜单那 1 项要真窗口，CI 跳过）
+.venv/Scripts/python.exe -m pytest -q            # 76 个冒烟测试（离线，< 2s；面板下拉那 1 项要真窗口，CI 跳过）
 .venv/Scripts/python.exe main.py --self-test     # 端到端启动自检
 ```
 

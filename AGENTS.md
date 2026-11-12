@@ -31,7 +31,7 @@
 
 - 解释器只有一个：`.venv/Scripts/python.exe`（仓库内虚拟环境）。
   **裸 `python` 是 Microsoft Store 的桩，退出码 9009**——用它跑脚本会静默失败，文件看起来"没改"。
-- 测试：`./.venv/Scripts/python.exe -m pytest -q`（当前 72 项，要求 < 2 秒；其中面板菜单那 1 项要真窗口，CI 的 ubuntu 会自动 skip）
+- 测试：`./.venv/Scripts/python.exe -m pytest -q`（当前 76 项，要求 < 2 秒；其中面板下拉那 1 项要真窗口，CI 的 ubuntu 会自动 skip）
 - 语法：`./.venv/Scripts/python.exe -m compileall -q .`
 - 自检：`./.venv/Scripts/python.exe main.py --self-test`
 - 依赖：`requirements.txt`（跨平台分段：Windows 装 dxcam/pydirectinput，其它平台自动只装可测部分）+ `requirements-dev.txt`。
@@ -48,6 +48,7 @@
 | `guard.py` | 前台窗口标题匹配 + 全局热键（纯 ctypes） |
 | `sender.py` | 聊天按键序列（unicode / clipboard 两种输入法） |
 | `calibrate.py` | 标定 + 体检 |
+| `paths.py` | 路径解析：用户数据统一收在 `<程序根>/config/`（配置/refs/logs），老版本根目录 config.json 自动沿用；`--config` 指到别处时 refs/logs 跟着走 |
 | `main.py` | 编排：配置、主循环、统计、自检、CLI、组装（`build_runtime`，CLI 与面板共用） |
 | `ui.py` | 展示与下发「开始/停止」：Tkinter 单窗口，控件自绘（圆角卡片/按钮/进度条/下拉框）+ 四套可切换外观（`STYLES`，选完写回 `ui.style`）；顶层不 import tkinter，纯逻辑可离线测 |
 
