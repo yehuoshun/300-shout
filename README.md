@@ -142,6 +142,7 @@ python main.py --self-test     # 离线跑通 配置→ROI→检测→守卫→�
 | `detect.confirm_frames` | 连续多少帧同向才切换状态 | 2 |
 | `chat.open_key` | 打开/发送聊天框按键 | enter |
 | `chat.channel_keys` | 频道切换序列（见下） | [] |
+| `chat.text_prefix` | 拼在台词前的文字前缀（如 `"/all "` 切公屏；不用就留空） | "" |
 | `chat.type_delay` | 逐字输入间隔 / 粘贴前延迟 | 0.08 |
 | `chat.enter_delay` | 按键间延迟 | 0.15 |
 | `chat.input_method` | `unicode`（逐字注入）或 `clipboard`（Ctrl+V） | unicode |
@@ -174,6 +175,7 @@ python main.py --list-windows     # 打印所有可见窗口标题
 | 当前频道直发 | `[]` |
 | Tab 切频道 | `["tab"]` |
 | Shift+Enter 切全部 | `["shift+enter"]` |
+| 靠文字前缀切公屏（如 `/all 内容`） | `channel_keys: []` + `text_prefix: "/all "` |
 
 > 组合键写作 `修饰键+主键`（如 `"shift+enter"`），内部走 `keyDown/keyUp` 包夹。
 > 注意 `["shift", "enter"]` 是**两个独立按键**，不是组合键。

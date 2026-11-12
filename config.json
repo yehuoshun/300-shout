@@ -21,6 +21,7 @@
     "type_delay": 0.08,
     "enter_delay": 0.15,
     "input_method": "unicode",
+    "text_prefix": "",
     "require_foreground": true,
     "foreground_titles": [
       "300英雄"

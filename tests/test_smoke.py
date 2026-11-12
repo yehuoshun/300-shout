@@ -420,5 +420,27 @@ def test_run_survives_send_error():
     assert fired == 1        # 触发并放行了，只是发送失败被吃掉
 
 
+def test_text_prefix_is_prepended(monkeypatch):
+    """有些游戏靠文字前缀切公屏（如 "/all "），前缀应无条件拼在台词前面。"""
+    cfg = main_mod.deep_merge(main_mod.DEFAULT_CFG, {"chat": {"text_prefix": "/all "}})
+    seen = []
+    monkeypatch.setattr(sender_mod, "send_chat", lambda text, **kw: seen.append(text))
+    main_mod.build_sender(cfg)("大招好了")
+    assert seen == ["/all 大招好了"]
+
+
+def test_text_prefix_default_is_empty(monkeypatch):
+    cfg = main_mod.deep_merge(main_mod.DEFAULT_CFG, {})
+    seen = []
+    monkeypatch.setattr(sender_mod, "send_chat", lambda text, **kw: seen.append(text))
+    main_mod.build_sender(cfg)("大招好了")
+    assert seen == ["大招好了"]
+
+
+def test_validate_config_rejects_non_string_prefix():
+    cfg = main_mod.deep_merge(main_mod.DEFAULT_CFG, {"chat": {"text_prefix": 123}})
+    assert any("text_prefix" in p for p in main_mod.validate_config(cfg))
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))

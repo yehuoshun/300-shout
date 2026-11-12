@@ -39,6 +39,7 @@ DEFAULT_CFG = {
         "type_delay": 0.08,
         "enter_delay": 0.15,
         "input_method": "unicode",
+        "text_prefix": "",
         "require_foreground": True,
         "foreground_titles": ["300英雄"],
     },
@@ -119,6 +120,8 @@ def validate_config(cfg: dict) -> list:
     chat = cfg.get("chat") or {}
     if not isinstance(chat.get("channel_keys") or [], list):
         problems.append("chat.channel_keys 必须是字符串数组，如 [] 或 [\"tab\"]")
+    if chat.get("text_prefix") is not None and not isinstance(chat.get("text_prefix"), str):
+        problems.append("chat.text_prefix 必须是字符串（如 \"/all \"，不需要就留空）")
     return problems
 
 
@@ -321,10 +324,11 @@ def build_sender(cfg: dict):
     """按配置组装发送回调。"""
     import sender as sender_mod
     c = cfg.get("chat") or {}
+    prefix = str(c.get("text_prefix") or "")  # 如 "/all "，有些游戏靠文字前缀切公屏
 
     def _send(text: str) -> None:
         sender_mod.send_chat(
-            text,
+            f"{prefix}{text}",
             open_key=c.get("open_key", "enter"),
             channel_keys=c.get("channel_keys") or [],
             type_delay=c.get("type_delay", 0.08),
