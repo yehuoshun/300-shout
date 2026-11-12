@@ -9,3 +9,5 @@ refs/
 build/
 dist/
 *.spec
+config/logs/
+config/refs/

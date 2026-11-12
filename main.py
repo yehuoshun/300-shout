@@ -19,7 +19,7 @@ import sys
 import time
 
 from logsetup import setup_logging
-from paths import DEFAULT_CONFIG, LOGS_DIR, REFS_DIR, ensure_config
+from paths import default_config, default_logs_dir, default_refs_dir, dirs_for, ensure_config
 
 log = logging.getLogger("300-shout.main")
 
@@ -61,8 +61,8 @@ def deep_merge(base: dict, override: dict) -> dict:
     return out
 
 
-def load_config(path: str = DEFAULT_CONFIG) -> dict:
-    path = ensure_config(path)
+def load_config(path: str = None) -> dict:
+    path = ensure_config(path or default_config())
     try:
         with open(path, encoding="utf-8") as f:
             user = json.load(f)
@@ -166,9 +166,10 @@ def crop_roi(frame, roi: dict):
     return frame[top:bottom, left:right]
 
 
-def load_refs(refs_dir: str = REFS_DIR):
+def load_refs(refs_dir: str = None):
     """读取标定生成的基准图。返回 (ready_img, cd_img|None)。"""
     import cv2
+    refs_dir = refs_dir or default_refs_dir()
     ready_path = os.path.join(refs_dir, "ready.png")
     cd_path = os.path.join(refs_dir, "cd.png")
     if not os.path.exists(ready_path):
@@ -358,8 +359,13 @@ def run(cfg: dict, capture, detector, send_fn, *, clock=time.monotonic,
 
 
 # ---------------------------------------------------------------- 组装
+def refs_for_config(config_path: str = None) -> str:
+    """基准图目录跟着配置文件走：--config 指到别处也不会拿到另一份 refs。"""
+    return dirs_for(config_path or default_config())[1]
+
+
 def build_runtime(cfg: dict, *, dry_run: bool = False, no_guard: bool = False,
-                  no_hotkeys: bool = False):
+                  no_hotkeys: bool = False, config_path: str = None):
     """按配置组装捕获/检测/发送/守卫/热键，返回 (cap, det, send_fn, guard_fn, hotkeys)。
 
     命令行与图形面板共用这里，避免两边各写一套。``cap.backend == "none"``
@@ -368,7 +374,7 @@ def build_runtime(cfg: dict, *, dry_run: bool = False, no_guard: bool = False,
     from capture import ScreenCapture
     from detect import CooldownDetector
 
-    ready_ref, cd_ref = load_refs()
+    ready_ref, cd_ref = load_refs(refs_for_config(config_path))
     det_cfg = cfg.get("detect") or {}
     cap_cfg = cfg.get("capture") or {}
     cap = ScreenCapture(fps=cap_cfg.get("fps", 10),
@@ -461,10 +467,11 @@ def self_test() -> int:
     import numpy as np
     from detect import CooldownDetector
 
-    setup_logging(log_dir=LOGS_DIR, level=logging.INFO)
+    cfg_path, _refs, logs_dir = dirs_for(default_config())
+    setup_logging(log_dir=logs_dir, level=logging.INFO)
     log.info("SELF-TEST 开始")
 
-    cfg = load_config(DEFAULT_CONFIG)
+    cfg = load_config(cfg_path)
     cfg["roi"] = {"left": 0, "top": 0, "right": 48, "bottom": 48}
     cfg["detect"]["lock_seconds"] = 0.0
     cfg["detect"]["confirm_frames"] = 2
@@ -615,7 +622,8 @@ def _launch_ui(config_path: str) -> int:
 def main(argv=None) -> int:
     _force_utf8_stdio()
     ap = argparse.ArgumentParser(description="300英雄 开大自动公屏喊话（图像识别）")
-    ap.add_argument("--config", default=DEFAULT_CONFIG, help="配置文件路径")
+    ap.add_argument("--config", default=default_config(),
+                    help="配置文件路径（默认程序目录下的 config/config.json）")
     ap.add_argument("--log-level", default="INFO", help="日志级别")
     ap.add_argument("--self-test", action="store_true", help="离线自检（不接触显示器/键盘）")
     ap.add_argument("--frames", type=int, default=None, help="最多处理 N 帧后退出")
@@ -654,7 +662,8 @@ def main(argv=None) -> int:
     if args.self_test:
         return self_test()
 
-    setup_logging(log_dir=LOGS_DIR,
+    args.config, _refs_dir, _logs_dir = dirs_for(args.config)
+    setup_logging(log_dir=_logs_dir,
                   level=getattr(logging, args.log_level.upper(), logging.INFO))
     log.info("300 Shout %s 启动", VERSION)
 
@@ -678,7 +687,8 @@ def main(argv=None) -> int:
         return 2
 
     cap, det, send_fn, guard_fn, hotkeys = build_runtime(
-        cfg, dry_run=args.dry_run, no_guard=args.no_guard, no_hotkeys=args.no_hotkeys)
+        cfg, dry_run=args.dry_run, no_guard=args.no_guard, no_hotkeys=args.no_hotkeys,
+        config_path=args.config)
     if cap.backend == "none":
         log.error("没有可用的捕获后端（dxcam 需 Windows；mss 需窗口化/有显示环境）。")
         return 3

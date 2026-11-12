@@ -1413,7 +1413,8 @@ class Panel:
             on_event(kind, data)
 
         cap = det = None
-        cap, det, send_fn, guard_fn, hotkeys = self.main.build_runtime(cfg)
+        cap, det, send_fn, guard_fn, hotkeys = self.main.build_runtime(
+            cfg, config_path=self.config_path)
         if getattr(cap, "backend", "none") == "none":
             relay("error", {"text": "没有可用的捕获后端（dxcam 需 Windows）。"})
             return

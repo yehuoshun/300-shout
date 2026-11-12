@@ -29,14 +29,15 @@ import time
 
 import cv2
 
-from paths import DEFAULT_CONFIG, REFS_DIR, ROOT
+from paths import default_config, dirs_for
 
 log = logging.getLogger("300-shout.calibrate")
 
 
 # ---------------------------------------------------------------- 核心
 def save_calibration(config_path: str, roi: dict, ready_img, cd_img=None,
-                     refs_dir: str = REFS_DIR) -> dict:
+                     refs_dir: str = None) -> dict:
+    refs_dir = refs_dir or dirs_for(config_path)[1]
     """写入基准图 + 更新 config.json 的 roi。返回更新后的配置。"""
     os.makedirs(refs_dir, exist_ok=True)
     ready_path = os.path.join(refs_dir, "ready.png")
@@ -76,8 +77,9 @@ def _score(img, ref) -> float:
     return val if np.isfinite(val) else float("nan")
 
 
-def check_calibration(config_path: str = DEFAULT_CONFIG,
-                      refs_dir: str = REFS_DIR):
+def check_calibration(config_path: str = None, refs_dir: str = None):
+    config_path = config_path or default_config()
+    refs_dir = refs_dir or dirs_for(config_path)[1]
     """标定体检。返回 ``(ok, lines)``；lines 每条形如 ``"OK/警告/错误: ..."``。"""
     import main as main_mod
 
@@ -167,7 +169,8 @@ def check_calibration(config_path: str = DEFAULT_CONFIG,
 
 
 # ---------------------------------------------------------------- 交互
-def _grab_screen(config_path: str = DEFAULT_CONFIG):
+def _grab_screen(config_path: str = None):
+    config_path = config_path or default_config()
     """抓一帧屏幕。按 config.json 的 capture 段走（多显示器时别抓错屏）。"""
     from capture import ScreenCapture
     import main as main_mod
@@ -259,12 +262,14 @@ def _parse_roi(s: str) -> dict:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="300 Shout 标定工具")
-    ap.add_argument("--config", default=DEFAULT_CONFIG, help="配置文件路径")
+    ap.add_argument("--config", default=default_config(),
+                    help="配置文件路径（默认程序目录下的 config/config.json）")
     ap.add_argument("--image", help="用现成全屏截图代替实时抓屏（离线模式）")
     ap.add_argument("--roi", help="ROI 像素，格式 x,y,w,h（跳过 GUI 框选）")
     ap.add_argument("--ready", help="现成『可用态』基准图路径（离线模式）")
     ap.add_argument("--cd", help="现成『CD 态』基准图路径（可选）")
-    ap.add_argument("--refs-dir", default=REFS_DIR, help="基准图输出目录")
+    ap.add_argument("--refs-dir", default=None,
+                    help="基准图目录（默认跟 config.json 同目录的 refs/）")
     ap.add_argument("--check", action="store_true",
                     help="只体检已有标定（不抓屏、不框选）")
     args = ap.parse_args(argv)

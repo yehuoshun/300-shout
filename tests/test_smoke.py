@@ -519,9 +519,11 @@ def test_check_guard_warns_when_guard_disabled(monkeypatch, capsys):
 def test_app_root_points_to_repo_root():
     assert paths_mod.ROOT == paths_mod.app_root()
     assert os.path.isfile(os.path.join(paths_mod.ROOT, "main.py"))
-    assert os.path.isfile(paths_mod.DEFAULT_CONFIG)
-    assert os.path.basename(paths_mod.REFS_DIR) == "refs"
-    assert os.path.basename(paths_mod.LOGS_DIR) == "logs"
+    # 用户数据收在 config/ 文件夹里，不再摊在根目录
+    assert paths_mod.default_config() == os.path.join(paths_mod.ROOT, "config", "config.json")
+    assert os.path.isfile(paths_mod.default_config())
+    assert paths_mod.default_refs_dir() == os.path.join(paths_mod.ROOT, "config", "refs")
+    assert paths_mod.default_logs_dir() == os.path.join(paths_mod.ROOT, "config", "logs")
 
 
 def test_app_root_follows_exe_when_frozen(tmp_path, monkeypatch):
@@ -534,22 +536,57 @@ def test_app_root_follows_exe_when_frozen(tmp_path, monkeypatch):
     assert paths_mod.bundle_dir() == str(tmp_path / "_MEI123")
 
 
+def test_layout_puts_user_data_in_config_folder(tmp_path):
+    cfg, refs, logs = paths_mod.layout(str(tmp_path))
+    assert cfg == str(tmp_path / "config" / "config.json")
+    assert refs == str(tmp_path / "config" / "refs")
+    assert logs == str(tmp_path / "config" / "logs")
+
+
+def test_layout_keeps_legacy_root_config(tmp_path):
+    (tmp_path / "config.json").write_text("{}", encoding="utf-8")
+    cfg, refs, logs = paths_mod.layout(str(tmp_path))
+    assert cfg == str(tmp_path / "config.json"), "老用户升级后不能突然变成未标定"
+    assert refs == str(tmp_path / "refs")
+    assert logs == str(tmp_path / "logs")
+    # 新位置也有了配置时，以新位置为准（老文件只是没删，不搬动用户文件）
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "config.json").write_text("{}", encoding="utf-8")
+    assert paths_mod.layout(str(tmp_path))[0] == str(tmp_path / "config" / "config.json")
+
+
+def test_dirs_for_follows_the_config_file(tmp_path):
+    cfg, refs, logs = paths_mod.dirs_for(str(tmp_path / "elsewhere" / "my.json"))
+    assert cfg == str(tmp_path / "elsewhere" / "my.json")
+    assert refs == str(tmp_path / "elsewhere" / "refs"), "基准图必须跟着配置走"
+    assert logs == str(tmp_path / "elsewhere" / "logs")
+
+
+def test_refs_follow_the_config_file(tmp_path):
+    """--config 指到别处时，基准图取那边配置旁边的 refs，而不是程序目录里的。"""
+    folder = tmp_path / "另一处"
+    assert main_mod.refs_for_config(str(folder / "config.json")) == str(folder / "refs")
+    assert main_mod.refs_for_config() == paths_mod.default_refs_dir()
+
+
 def test_ensure_config_seeds_bundled_default(tmp_path, monkeypatch):
     bundle = tmp_path / "bundle"
-    bundle.mkdir()
-    (bundle / "config.json").write_text('{"phrases": ["内置"]}', encoding="utf-8")
+    (bundle / "config").mkdir(parents=True)
+    (bundle / "config" / "config.json").write_text('{"phrases": ["内置"]}', encoding="utf-8")
     monkeypatch.setattr(paths_mod, "BUNDLE_DIR", str(bundle))
-    target = tmp_path / "app" / "config.json"
+    target = tmp_path / "app" / "config" / "config.json"
     assert paths_mod.ensure_config(str(target)) == str(target)
     assert json.loads(target.read_text(encoding="utf-8")) == {"phrases": ["内置"]}
+    assert target.parent.is_dir(), "首次运行要自动建出 config/ 文件夹"
 
 
 def test_ensure_config_keeps_user_file(tmp_path, monkeypatch):
     bundle = tmp_path / "bundle"
-    bundle.mkdir()
-    (bundle / "config.json").write_text('{"a": 1}', encoding="utf-8")
+    (bundle / "config").mkdir(parents=True)
+    (bundle / "config" / "config.json").write_text('{"a": 1}', encoding="utf-8")
     monkeypatch.setattr(paths_mod, "BUNDLE_DIR", str(bundle))
-    target = tmp_path / "config.json"
+    target = tmp_path / "config" / "config.json"
+    target.parent.mkdir()
     target.write_text('{"a": 2}', encoding="utf-8")
     assert paths_mod.ensure_config(str(target)) == str(target)
     assert json.loads(target.read_text(encoding="utf-8")) == {"a": 2}
@@ -557,7 +594,7 @@ def test_ensure_config_keeps_user_file(tmp_path, monkeypatch):
 
 def test_ensure_config_without_bundled_copy_is_harmless(tmp_path, monkeypatch):
     monkeypatch.setattr(paths_mod, "BUNDLE_DIR", str(tmp_path / "nope"))
-    target = tmp_path / "config.json"
+    target = tmp_path / "config" / "config.json"
     assert paths_mod.ensure_config(str(target)) == str(target)
     assert not target.exists()
 
@@ -874,7 +911,7 @@ def test_main_no_args_opens_panel(monkeypatch):
 
 def test_build_runtime_is_shared_by_cli_and_panel():
     """命令行与面板共用同一个组装函数，避免两套逻辑漂移。"""
-    cfg = main_mod.load_config(os.path.join(ROOT, "config.json"))
+    cfg = main_mod.load_config(paths_mod.default_config())
     cfg["detect"] = dict(cfg.get("detect") or {})
     cfg["detect"]["confirm_frames"] = 2
 
