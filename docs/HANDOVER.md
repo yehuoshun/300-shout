@@ -150,7 +150,7 @@
 | `logsetup.py` | ✅ | 日志系统 |
 | `paths.py` | ✅ | 路径规则：源码/exe 两套根目录，`ensure_config` 首次释放默认配置 |
 | `requirements*.txt` | ✅ | 跨平台依赖（Windows 标记） |
-| `tests/test_smoke.py` | ✅ | 53 个离线冒烟测试 |
+| `tests/test_smoke.py` | ✅ | 65 个离线冒烟测试 |
 | `.github/workflows/ci.yml` | ✅ | CI：Linux 启动自检 + Windows 依赖链 |
 | `.github/workflows/release.yml` | ✅ | 推 `v*` tag 打单文件 exe 并发布到 Releases |
 | `README.md` | ✅ | 用户文档（含安全护栏/参数表/排错表） |
@@ -227,6 +227,13 @@
 17. **新增** `.github/workflows/release.yml`：推 `v*` tag 自动 PyInstaller 打单文件 exe、跑 `exe --self-test`、
     发到 Releases（附 sha256 与 zip）；tag 与 `main.VERSION` 不一致时直接失败
 18. **新增** `--calibrate` / `--calibrate-check`：把标定工具编进 exe，打包版用户不必再装 Python
+19. **新增** `ui.py` 图形控制面板（v3.1）：双击 exe 无参数即开窗——状态灯与实时 `ready`/`cd`
+    分数、开始/停止、一键标定、台词池编辑、日志滚动区、发送测试。要点：
+    `main.run()` 加了 `stop_event` 与 `on_event` 回调（界面靠它刷新，不再读主循环内部变量），
+    组装逻辑抽成 `main.build_runtime()` 给 CLI 与面板共用，避免两套逻辑漂移；
+    `ui` 顶层不 import tkinter（CI 无图形环境也能 `import ui`），面板逻辑拆成
+    `fmt_score/status_view/PhraseBook/Session` 这些可测纯函数；界面回调异常被 `_emit` 吞掉并记日志，
+    界面炸不影响识别。窗口关闭即 `Session.stop()`，不留后台线程
 
 ### v2（2026-11-11）
 1. **补齐** `main.py`（入口 + 日志 + 主循环 + `--self-test`）、`calibrate.py`（标定，GUI/离线双模式）、`logsetup.py`

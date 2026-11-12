@@ -53,6 +53,24 @@ flowchart TD
 | 日志 | `logsetup.py` | 控制台 + 文件（`logs/`，2MB 轮转 ×3） |
 | 入口 | `main.py` | 主循环：捕获→检测→守卫→发送 + 日志/统计/热键 |
 
+## 图形面板（v3.1 起，推荐）
+
+双击 `300-Shout.exe`（不带参数）直接开控制面板，不用记任何命令行参数：
+
+![控制面板](docs/ui-panel.png)
+
+- **状态灯**：未标定 / 已停止 / 监控中 / 大招已就绪 / 冷却中，配实时 `ready`、`cd` 分数与阈值
+- **一键标定**：点「标定 R 槽」框选游戏里的大招图标，标完自动重新读配置
+- **台词池编辑**：增删台词，直接写回 `config.json`（其余配置键原样保留）
+- **运行日志**：和 `logs/300-shout.log` 同步滚动，不用再去翻文件
+- **发送测试**：单独验一次聊天链路，不用等开大
+
+关窗即退出，不常驻、不托盘、不开后台服务、不联网——和命令行版是同一条红线。
+想回到纯命令行：`300-Shout.exe --no-ui --dry-run --stats 5`；源码版是
+`.venv\Scripts\python.exe main.py`（无参数同样开面板）。
+
+> 面板是 Tkinter，只依赖标准库；崩了也不影响识别主循环（界面回调异常会被吞掉并记进日志）。
+
 ## 下载 exe（免装 Python）
 
 不想装 Python 的话，直接去 [Releases](https://github.com/yehuoshun/300-shout/releases/latest) 下
@@ -60,7 +78,8 @@ flowchart TD
 
 1. 放进**自己有写权限的固定目录**（例如 `D:\Tools\300-Shout\`）——首次运行会在 exe 旁边生成
    `config.json` 和 `logs\`，配置和标定结果都存在这里；放临时目录或只读目录会丢配置。
-2. 命令与源码版完全一致，把 `.venv\Scripts\python.exe main.py` 换成 `300-Shout.exe` 即可：
+2. **双击 exe 就开控制面板**（见上一节）。想用命令行，参数与源码版完全一致，
+   把 `.venv\Scripts\python.exe main.py` 换成 `300-Shout.exe` 即可：
    `300-Shout.exe --list-windows`、`300-Shout.exe --check-guard`、`300-Shout.exe --self-test`。
 3. 标定也在 exe 里：`300-Shout.exe --calibrate`（框选大招图标）→ `300-Shout.exe --calibrate-check`
    （体检）。标定完 `refs\` 和 `config.json` 就在 exe 旁边。
@@ -159,6 +178,8 @@ pip install -r requirements.txt      # Windows 自动带上 dxcam / pydirectinpu
 | `--test-send TEXT` | 真机发送测试：把 TEXT 发进游戏（不抓屏、不用标定，守卫照常生效） |
 | `--calibrate` | 打开标定工具（等价 `python calibrate.py`）：框选大招图标 + 采基准图。exe 版同样可用 |
 | `--calibrate-check` | 标定体检（等价 `calibrate.py --check`）：尺寸/纹理/两态可分性 + 建议阈值 |
+| `--ui` | 打开图形控制面板（双击 exe 无参数时默认就是这个） |
+| `--no-ui` | 无参数时也不开面板，直接走命令行主循环（服务器/脚本调用用） |
 | `--self-test` | 离线自检 |
 | `--config PATH` | 指定配置文件 |
 | `--log-level L` | 日志级别（默认 INFO） |
@@ -233,6 +254,7 @@ pip install -r requirements.txt      # Windows 自动带上 dxcam / pydirectinpu
 ├── detect.py          # 检测层：模板匹配 + 多帧确认 + 下降沿
 ├── guard.py           # 安全层：前台窗口校验 + 全局热键
 ├── sender.py          # 发送层：聊天按键序列 + 剪贴板兜底
+├── ui.py              # 图形控制面板（Tkinter，关窗即退；纯逻辑可离线测）
 ├── calibrate.py       # 标定工具 + 体检
 ├── logsetup.py        # 日志系统
 ├── config.json        # 全部可调参数
@@ -249,7 +271,7 @@ pip install -r requirements.txt      # Windows 自动带上 dxcam / pydirectinpu
 ```bash
 python -m venv .venv
 .venv/Scripts/python.exe -m pip install -r requirements.txt -r requirements-dev.txt   # Windows
-.venv/Scripts/python.exe -m pytest -q            # 53 个冒烟测试（离线，< 2s）
+.venv/Scripts/python.exe -m pytest -q            # 65 个冒烟测试（离线，< 2s）
 .venv/Scripts/python.exe main.py --self-test     # 端到端启动自检
 ```
 

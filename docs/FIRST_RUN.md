@@ -11,6 +11,10 @@
 > 解释器：这台机器上系统的 `python` 是 Microsoft Store 的桩（跑起来直接 9009），
 > 下文所有命令统一用仓库内的 `.venv\Scripts\python.exe`——里面已经装好 cv2 / dxcam / pydirectinput。
 >
+> **用面板（v3.1，推荐）**：双击 `300-Shout.exe` 开控制面板 → 点「标定 R 槽」框选大招图标 →
+> 点「标定体检」看结论 → 切到游戏点「开始监控」→ 开大验证。下面 8 步的**判据完全适用**，
+> 只是把命令换成了按钮；需要看详细日志时仍按下面的步骤在终端里跑一遍更稳。
+>
 > **用 exe 版（Releases 里的 `300-Shout.exe`）就免装 Python**：把下文的
 > `.venv\Scripts\python.exe main.py` 换成 `300-Shout.exe`，标定那一步换成
 > `300-Shout.exe --calibrate`、`300-Shout.exe --calibrate-check`。判据与期望日志完全一样。

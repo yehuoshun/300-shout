@@ -23,14 +23,15 @@
    （pydirectinput 或 ctypes）。
 3. **前台校验 fail-closed**。`require_foreground` 默认 true；`title_matches()` 在标题为 None/空串时返回 False（宁可不发，不可错发）。不允许新增"默认跳过守卫"的分支；`--no-guard` 仅限演练与单发测试，使用时必须留显式告警日志。
 4. **未标定不得正式发送**。`validate_config()` 里的阻断项不许为了"先跑起来"被删掉或降级成 warning。
-5. **非必要不常驻**。不做守护进程、系统服务、开机自启、文件监听、后台任务队列。程序形态固定为「用户显式启动 → 主循环 → F9 退出」的一次性进程；要定时就交给外部调度器。
+5. **非必要不常驻**。不做守护进程、系统服务、开机自启、文件监听、后台任务队列。程序形态固定为「用户显式启动 → 主循环 → F9 退出（或关窗）的一次性进程；要定时就交给外部调度器。
+   图形面板（`ui.py`）也是这个形态：点开才有、关窗即退，不做托盘/自启/后台服务。
 6. **抓屏只用公开 API**（Desktop Duplication / `mss`）。不 hook 显卡驱动、不读游戏私有呈现表面。
 
 ## 3. 环境（本机已配好，照抄）
 
 - 解释器只有一个：`.venv/Scripts/python.exe`（仓库内虚拟环境）。
   **裸 `python` 是 Microsoft Store 的桩，退出码 9009**——用它跑脚本会静默失败，文件看起来"没改"。
-- 测试：`./.venv/Scripts/python.exe -m pytest -q`（当前 53 项，要求 < 2 秒）
+- 测试：`./.venv/Scripts/python.exe -m pytest -q`（当前 65 项，要求 < 2 秒）
 - 语法：`./.venv/Scripts/python.exe -m compileall -q .`
 - 自检：`./.venv/Scripts/python.exe main.py --self-test`
 - 依赖：`requirements.txt`（跨平台分段：Windows 装 dxcam/pydirectinput，其它平台自动只装可测部分）+ `requirements-dev.txt`。
@@ -47,7 +48,8 @@
 | `guard.py` | 前台窗口标题匹配 + 全局热键（纯 ctypes） |
 | `sender.py` | 聊天按键序列（unicode / clipboard 两种输入法） |
 | `calibrate.py` | 标定 + 体检 |
-| `main.py` | 编排：配置、主循环、统计、自检、CLI |
+| `main.py` | 编排：配置、主循环、统计、自检、CLI、组装（`build_runtime`，CLI 与面板共用） |
+| `ui.py` | 展示与下发「开始/停止」：Tkinter 单窗口；顶层不 import tkinter，纯逻辑可离线测 |
 
 - **语言**：注释、docstring、日志、提交信息一律中文；标识符英文 `snake_case`。
 - **日志**：`logging.getLogger("300-shout.<模块名>")`，模块内不自己配 handler（统一走 `logsetup`）。
