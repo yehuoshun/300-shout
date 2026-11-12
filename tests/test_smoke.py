@@ -671,6 +671,33 @@ def test_status_view_five_states():
     assert "冷却" in text and level == "ok"
 
 
+def test_status_brief_five_states():
+    # 面板用短标签进胶囊，引导语单独一行；标签必须短到不会把胶囊撑开
+    assert ui_mod.status_brief(calibrated=False, running=False)[:2] == (
+        "未标定", ui_mod.GUIDE["未标定"])
+    label, guide, level = ui_mod.status_brief(calibrated=True, running=False)
+    assert (label, level) == ("已停止", "idle") and guide
+    label, _guide, level = ui_mod.status_brief(calibrated=True, running=True)
+    assert (label, level) == ("启动中", "run")
+    label, _guide, level = ui_mod.status_brief(calibrated=True, running=True,
+                                               ready=0.93, threshold=0.8)
+    assert (label, level) == ("待命中", "ok")
+    label, _guide, level = ui_mod.status_brief(calibrated=True, running=True,
+                                               ready=0.12, threshold=0.8, locked=True)
+    assert (label, level) == ("冷却中", "ok")
+    for label in ui_mod.GUIDE:
+        assert 1 <= len(label) <= 4, "胶囊里的标签要短"
+
+
+def test_both_palettes_cover_same_keys():
+    # 少一个键，切主题时就会 KeyError 或某个控件突然没颜色
+    light, dark = ui_mod.PALETTES["light"], ui_mod.PALETTES["dark"]
+    assert set(light) == set(dark)
+    for name, pal in ui_mod.PALETTES.items():
+        for key, value in pal.items():
+            assert value.startswith("#") and len(value) == 7, f"{name}.{key} 不是 #rrggbb"
+
+
 def test_phrase_book_rules():
     book = ui_mod.PhraseBook(["第一条", "  ", "第二条"])
     assert book.as_list() == ["第一条", "第二条"]
