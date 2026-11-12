@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 
 import cv2
 import numpy as np
@@ -19,6 +20,7 @@ import calibrate as calib_mod  # noqa: E402
 import guard as guard_mod      # noqa: E402
 import main as main_mod        # noqa: E402
 import paths as paths_mod      # noqa: E402
+import ui as ui_mod    # noqa: E402
 import sender as sender_mod    # noqa: E402
 from detect import CooldownDetector  # noqa: E402
 
@@ -583,6 +585,207 @@ def test_main_dispatches_calibrate_flags(monkeypatch):
     assert main_mod.main(["--calibrate", "--config", "x.json"]) == 7
     assert main_mod.main(["--calibrate-check", "--config", "y.json"]) == 7
     assert seen == [["--config", "x.json"], ["--config", "y.json", "--check"]]
+
+
+# ---------------------------------------------------------------- 3.1.0 面板
+def _ui_cfg():
+    return {"roi": {"left": 0, "top": 0, "right": 48, "bottom": 48},
+            "phrases": ["台词一"], "min_interval": 0, "max_interval": 0,
+            "capture": {"fps": 10},
+            "detect": {"threshold": 0.8, "lock_seconds": 0.0, "confirm_frames": 2}}
+
+
+def test_run_leaves_loop_when_stop_event_set():
+    """面板点「停止」= 置位 stop_event，主循环必须立刻退出。"""
+    import threading
+    ready_ref, cd_ref = tex(1), tex(2)
+    det = CooldownDetector(ready_ref, cd_ref, threshold=0.8, lock_seconds=0.0,
+                           confirm_frames=2)
+    frames = [ready_ref, cd_ref, cd_ref, ready_ref, ready_ref, cd_ref, cd_ref]
+    stop = threading.Event()
+    stop.set()
+    sent = []
+    n = main_mod.run(_ui_cfg(), main_mod._FakeCapture(frames), det, sent.append,
+                     max_frames=len(frames), stop_event=stop,
+                     sleeper=lambda *_: None, clock=lambda: 0.0)
+    assert n == 0 and sent == []
+
+
+def test_run_emits_start_tick_trigger_stop():
+    """面板靠这些事件刷新状态灯与计数；kind 与 payload 必须齐全。"""
+    ready_ref, cd_ref = tex(1), tex(2)
+    det = CooldownDetector(ready_ref, cd_ref, threshold=0.8, lock_seconds=0.0,
+                           confirm_frames=2)
+    frames = [ready_ref, ready_ref, cd_ref, cd_ref, ready_ref, ready_ref, cd_ref]
+    seen = []
+    n = main_mod.run(_ui_cfg(), main_mod._FakeCapture(frames), det, lambda t: None,
+                     max_frames=len(frames), sleeper=lambda *_: None,
+                     clock=lambda: 0.0, on_event=lambda k, p: seen.append((k, dict(p))))
+    kinds = [k for k, _ in seen]
+    assert kinds[0] == "start" and kinds[-1] == "stop"
+    assert "tick" in kinds and "trigger" in kinds
+    assert n >= 1
+    tick = [p for k, p in seen if k == "tick"][-1]
+    assert set(("frames", "triggers", "sent", "blocked", "errors")) <= set(tick)
+    assert tick["triggers"] >= 1 and tick["sent"] >= 1
+    trig = [p for k, p in seen if k == "trigger"][0]
+    assert trig["allowed"] is True and trig["text"] == "台词一"
+
+
+def test_run_survives_broken_event_callback():
+    """界面回调抛异常不能把识别循环带崩。"""
+    ready_ref, cd_ref = tex(1), tex(2)
+    det = CooldownDetector(ready_ref, cd_ref, threshold=0.8, lock_seconds=0.0,
+                           confirm_frames=2)
+
+    def boom(kind, payload):
+        raise RuntimeError("面板炸了")
+
+    frames = [ready_ref, ready_ref, cd_ref, cd_ref]
+    n = main_mod.run(_ui_cfg(), main_mod._FakeCapture(frames), det, lambda t: None,
+                     max_frames=len(frames), sleeper=lambda *_: None,
+                     clock=lambda: 0.0, on_event=boom)
+    assert n == 1
+
+
+def test_fmt_score_and_score_line():
+    assert ui_mod.fmt_score(0.9312) == "0.93"
+    assert ui_mod.fmt_score(None) == "—"
+    assert ui_mod.fmt_score(float("nan")) == "—"
+    assert "ready 0.93" in ui_mod.score_line(0.9312, 0.02, 0.8)
+
+
+def test_status_view_five_states():
+    text, level = ui_mod.status_view(calibrated=False, running=False)
+    assert "未标定" in text and level == "warn"
+    text, level = ui_mod.status_view(calibrated=True, running=False)
+    assert "已停止" in text and level == "idle"
+    text, level = ui_mod.status_view(calibrated=True, running=True, ready=0.95,
+                                     threshold=0.8)
+    assert "已就绪" in text and level == "ok"
+    text, level = ui_mod.status_view(calibrated=True, running=True, ready=0.12,
+                                     threshold=0.8)
+    assert "未就绪" in text and level == "run"
+    text, level = ui_mod.status_view(calibrated=True, running=True, ready=0.12,
+                                     threshold=0.8, locked=True)
+    assert "冷却" in text and level == "ok"
+
+
+def test_phrase_book_rules():
+    book = ui_mod.PhraseBook(["第一条", "  ", "第二条"])
+    assert book.as_list() == ["第一条", "第二条"]
+    ok, why = book.add("")
+    assert not ok and "空" in why
+    ok, why = book.add("第一条")
+    assert not ok and "已经有" in why
+    ok, added = book.add(" 第三条 ")
+    assert ok and added == "第三条" and book.as_list()[-1] == "第三条"
+    ok, why = book.add("长" * 61)
+    assert not ok and "太长" in why
+    assert book.remove(0) == "第一条"
+    assert book.remove(99) is None
+    assert book.replace(0, "改过的") is True
+    assert book.as_list()[0] == "改过的"
+
+
+def test_save_phrases_keeps_other_keys(tmp_path):
+    cfg_path = tmp_path / "config.json"
+    cfg_path.write_text(json.dumps({"roi": {"left": 1}, "phrases": ["旧"],
+                                    "chat": {"input_method": "clipboard"}},
+                                   ensure_ascii=False), encoding="utf-8")
+    assert ui_mod.save_phrases(str(cfg_path), ["新一", "新二"]) is True
+    data = json.loads(cfg_path.read_text(encoding="utf-8"))
+    assert data["phrases"] == ["新一", "新二"]
+    assert data["chat"]["input_method"] == "clipboard"
+    assert data["roi"]["left"] == 1
+    assert not os.path.exists(str(cfg_path) + ".tmp")
+
+
+def test_save_phrases_reports_broken_config(tmp_path):
+    bad = tmp_path / "config.json"
+    bad.write_text("{ 不是 json", encoding="utf-8")
+    assert ui_mod.save_phrases(str(bad), ["x"]) is False
+    assert ui_mod.save_phrases(str(tmp_path / "missing.json"), ["x"]) is False
+
+
+def test_session_start_and_stop():
+    seen = []
+
+    def runner(stop_event, on_event):
+        seen.append("start")
+        stop_event.wait(5.0)
+        seen.append("stop")
+
+    session = ui_mod.Session(runner)
+    assert session.running is False
+    assert session.stop() is False          # 还没开始，停止是空操作
+    assert session.start() is True
+    assert session.start() is False          # 不允许开两个
+    assert session.running is True
+    assert session.stop(3.0) is True
+    assert session.running is False
+    assert seen == ["start", "stop"]
+
+
+def test_session_reports_runner_crash():
+    got = []
+
+    def runner(stop_event, on_event):
+        raise RuntimeError("抓屏炸了")
+
+    session = ui_mod.Session(runner)
+    session.start(lambda k, p: got.append((k, dict(p))))
+    for _ in range(200):
+        if not session.running:
+            break
+        time.sleep(0.01)
+    assert got and got[0][0] == "error"
+    assert "抓屏炸了" in got[0][1]["text"]
+
+
+def test_main_no_args_opens_panel(monkeypatch):
+    """双击 exe（无参数）→ 开面板；--no-ui 时必须走命令行。"""
+    import types
+    fake = types.ModuleType("ui")
+    opened = []
+    fake.launch = lambda path: (opened.append(path), 0)[1]
+    monkeypatch.setitem(sys.modules, "ui", fake)
+    monkeypatch.setattr(sys, "argv", ["300-Shout.exe"])
+    assert main_mod.main(None) == 0
+    assert len(opened) == 1
+    monkeypatch.setattr(sys, "argv", ["300-Shout.exe", "--no-ui"])
+    main_mod.main(None)          # 未标定的配置必然返回非 0，重点是没开面板
+    assert len(opened) == 1
+
+
+def test_build_runtime_is_shared_by_cli_and_panel():
+    """命令行与面板共用同一个组装函数，避免两套逻辑漂移。"""
+    cfg = main_mod.load_config(os.path.join(ROOT, "config.json"))
+    cfg["detect"] = dict(cfg.get("detect") or {})
+    cfg["detect"]["confirm_frames"] = 2
+
+    class _Cap:
+        backend = "fake"
+
+        def __init__(self, *a, **kw):
+            pass
+
+        def grab(self):
+            return None
+
+        def release(self):
+            pass
+
+    mp = pytest.MonkeyPatch()
+    mp.setattr("capture.ScreenCapture", _Cap)
+    mp.setattr(main_mod, "load_refs", lambda *a, **kw: (tex(1), tex(2)))
+    try:
+        cap, det, send_fn, guard_fn, hotkeys = main_mod.build_runtime(cfg, dry_run=True)
+    finally:
+        mp.undo()
+    assert cap.backend == "fake"
+    assert send_fn is None            # dry_run 下绝不碰键盘
+    assert det is not None
 
 
 if __name__ == "__main__":
