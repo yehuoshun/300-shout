@@ -136,9 +136,11 @@
 | `main.py` | ✅ | 主循环入口 + 日志 + 统计 + 热键 + `--self-test`/`--dry-run`/`--list-windows` |
 | `logsetup.py` | ✅ | 日志系统 |
 | `requirements*.txt` | ✅ | 跨平台依赖（Windows 标记） |
-| `tests/test_smoke.py` | ✅ | 28 个离线冒烟测试 |
+| `tests/test_smoke.py` | ✅ | 45 个离线冒烟测试 |
 | `.github/workflows/ci.yml` | ✅ | CI：Linux 启动自检 + Windows 依赖链 |
 | `README.md` | ✅ | 用户文档（含安全护栏/参数表/排错表） |
+| `AGENTS.md` | ✅ | 开发约束：红线、分层职责、必跑检查、文档同步表、已知坑 |
+| `docs/FIRST_RUN.md` | ✅ | 真机首验陪跑清单（8 步，每步带判据与失败对照表） |
 
 ## 7. 环境依赖
 
@@ -198,6 +200,10 @@
     `_grab_screen(config_path)` 现在按配置走，配置读不出来也不影响标定
 14. **新增** `--check-guard`（只读前台标题、不发键，判断白名单是否命中）与
     `docs/FIRST_RUN.md`（真机首验陪跑清单：8 步，每步带判据与失败对照表）
+15. **新增** 根目录 `AGENTS.md`：给 AI 编码代理/后来者的硬约束——六条红线（纯图像识别、不主动提权、
+    前台校验 fail-closed、未标定不发送、非必要不常驻、只用公开抓屏 API）、分层职责边界、
+    配置三件套、测试离线化要求、"改完必跑"三条命令、文档同步表、七条已知坑。
+    顺带修正 README/HANDOVER 里过期的测试数（28 → 45）与裸 `python` 命令
 
 ### v2（2026-11-11）
 1. **补齐** `main.py`（入口 + 日志 + 主循环 + `--self-test`）、`calibrate.py`（标定，GUI/离线双模式）、`logsetup.py`

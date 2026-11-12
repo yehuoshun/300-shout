@@ -21,7 +21,7 @@
 | 护栏 | 作用 | 开关 |
 |------|------|------|
 | 前台窗口校验 | 只有前台窗口标题命中白名单才发送；拿不到标题时**默认不发送** | `chat.require_foreground` / `--no-guard` |
-| 演练模式 | 只打印「本应发送」的台词，**完全不碰键盘** | `python main.py --dry-run --stats` |
+| 演练模式 | 只打印「本应发送」的台词，**完全不碰键盘** | `.venv\Scripts\python.exe main.py --dry-run --stats` |
 | 全局热键 | 误触发时一键停：F8 暂停/继续，F9 退出（不需要去点控制台） | `hotkeys` / `--no-hotkeys` |
 | 多帧确认 | 连续 N 帧同向才切换状态，挡掉技能图标上的脉冲/粒子特效误判 | `detect.confirm_frames` |
 | 防抖锁 | 触发后 N 秒内不再触发 | `detect.lock_seconds` |
@@ -61,8 +61,8 @@ pip install -r requirements.txt      # Windows 自动带上 dxcam / pydirectinpu
 ### 1. 标定（一次性）
 
 ```bash
-python calibrate.py            # GUI 框选 + 采基准
-python calibrate.py --check    # 体检：尺寸/纹理/两态可分性 + 建议阈值
+.venv\Scripts\python.exe calibrate.py            # GUI 框选 + 采基准
+.venv\Scripts\python.exe calibrate.py --check    # 体检：尺寸/纹理/两态可分性 + 建议阈值
 ```
 
 1. 游戏进自定义/训练模式
@@ -78,7 +78,7 @@ python calibrate.py --check    # 体检：尺寸/纹理/两态可分性 + 建议
 ### 2. 先演练，再实战
 
 ```bash
-python main.py --dry-run --stats 30    # 只检测不发送，每 30s 打印相似度
+.venv\Scripts\python.exe main.py --dry-run --stats 30    # 只检测不发送，每 30s 打印相似度
 ```
 
 看两个数：放大招时（就在游戏里按 R，不用真等对局）
@@ -90,14 +90,14 @@ python main.py --dry-run --stats 30    # 只检测不发送，每 30s 打印相�
 确认检测正常后，先单独验证「发得出」（不用等真触发）：
 
 ```bash
-python main.py --test-send "测试一下"    # 切到游戏，回车发出去应该能看到这句话
+.venv\Scripts\python.exe main.py --test-send "测试一下"    # 切到游戏，回车发出去应该能看到这句话
 ```
 
 发得出来后实战：
 
 ```bash
-python main.py                    # 默认每 60s 打印一次统计
-python main.py --stats 30         # 自定义统计间隔
+.venv\Scripts\python.exe main.py                    # 默认每 60s 打印一次统计
+.venv\Scripts\python.exe main.py --stats 30         # 自定义统计间隔
 ```
 
 ### 3. 运行中的热键
@@ -113,7 +113,7 @@ python main.py --stats 30         # 自定义统计间隔
 ### 4. 启动自检（不接触显示器/键盘）
 
 ```bash
-python main.py --self-test     # 离线跑通 配置→ROI→检测→守卫→热键→日志 整条链路
+.venv\Scripts\python.exe main.py --self-test     # 离线跑通 配置→ROI→检测→守卫→热键→日志 整条链路
 ```
 
 ## 命令行参数
@@ -162,7 +162,7 @@ python main.py --self-test     # 离线跑通 配置→ROI→检测→守卫→�
 ### 前台窗口白名单
 
 ```bash
-python main.py --list-windows     # 打印所有可见窗口标题
+.venv\Scripts\python.exe main.py --list-windows     # 打印所有可见窗口标题
 ```
 
 把游戏窗口标题里的稳定片段填进 `chat.foreground_titles`（例如 `"300英雄"`）。
@@ -205,6 +205,7 @@ python main.py --list-windows     # 打印所有可见窗口标题
 ├── logsetup.py        # 日志系统
 ├── config.json        # 全部可调参数
 ├── requirements*.txt  # 运行 / 测试依赖
+├── AGENTS.md          # 开发约束（红线 / 分层 / 必跑检查 / 已知坑）
 ├── refs/              # 标定生成的基准图（gitignore）
 ├── logs/              # 运行日志（gitignore）
 ├── tests/             # 冒烟测试（离线）
@@ -216,9 +217,12 @@ python main.py --list-windows     # 打印所有可见窗口标题
 ```bash
 python -m venv .venv
 .venv/Scripts/python.exe -m pip install -r requirements.txt -r requirements-dev.txt   # Windows
-python -m pytest -q            # 28 个冒烟测试（离线）
-python main.py --self-test     # 端到端启动自检
+.venv/Scripts/python.exe -m pytest -q            # 45 个冒烟测试（离线，< 2s）
+.venv/Scripts/python.exe main.py --self-test     # 端到端启动自检
 ```
+
+> 本机没有可用的系统 `python`（Microsoft Store 桩，退出码 9009），所有命令都走 `.venv/Scripts/python.exe`。
+> 动手改代码前先读 [AGENTS.md](AGENTS.md)：红线、分层约定、改完必跑的检查都在里面。
 
 CI（`.github/workflows/ci.yml`）两个任务：
 

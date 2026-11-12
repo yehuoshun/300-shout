@@ -8,13 +8,16 @@
 准备：游戏进**自定义/训练模式**（别开真对局）；桌面留一个记事本窗口用来对比；
 显示器如果不止一块，先确认游戏在哪块屏（`capture.output_idx`，主屏为 0）。
 
+> 解释器：这台机器上系统的 `python` 是 Microsoft Store 的桩（跑起来直接 9009），
+> 下文所有命令统一用仓库内的 `.venv\Scripts\python.exe`——里面已经装好 cv2 / dxcam / pydirectinput。
+
 ---
 
 ## ☐ 0. 离线自检（不碰屏幕、不发键，30 秒）
 
 ```bash
-python main.py --version      # 期望：300-shout 3.0.0
-python main.py --self-test    # 期望：末行 SELF-TEST OK: 触发 1 次, 台词=[...]
+.venv\Scripts\python.exe main.py --version      # 期望：300-shout 3.0.0
+.venv\Scripts\python.exe main.py --self-test    # 期望：末行 SELF-TEST OK: 触发 1 次, 台词=[...]
 ```
 
 不过就先别往下走：说明 Python 环境/cv2 装错了（`pip install -r requirements.txt`）。
@@ -24,7 +27,7 @@ python main.py --self-test    # 期望：末行 SELF-TEST OK: 触发 1 次, 台�
 ## ☐ 1. 查游戏窗口标题
 
 ```bash
-python main.py --list-windows
+.venv\Scripts\python.exe main.py --list-windows
 ```
 
 从输出里找游戏那一行，把**稳定片段**填进 `config.json`：
@@ -36,7 +39,7 @@ python main.py --list-windows
 判据：切到游戏窗口后再跑一次（这个命令**不抓屏、不发键**，只读前台标题）：
 
 ```bash
-python main.py --check-guard
+.venv\Scripts\python.exe main.py --check-guard
 ```
 
 期望输出 `当前前台窗口: '...'` + `结果: 通过`。出现「不通过」就把实际标题片段填进去。
@@ -50,7 +53,7 @@ python main.py --check-guard
 ## ☐ 2. 标定 R 槽
 
 ```bash
-python calibrate.py
+.venv\Scripts\python.exe calibrate.py
 ```
 
 1. 截图弹出后框选**技能栏 R 槽**（只框图标，别带边框/数字）。2K/4K 会自动缩到 1600×900 预览，
@@ -62,7 +65,7 @@ python calibrate.py
 然后单独再跑一次体检：
 
 ```bash
-python calibrate.py --check
+.venv\Scripts\python.exe calibrate.py --check
 ```
 
 判据：**没有「错误」行**，警告按提示处理。重点看三条：
@@ -79,7 +82,7 @@ python calibrate.py --check
 ## ☐ 3. 演练：只看检测，不发一个键
 
 ```bash
-python main.py --dry-run --stats 10
+.venv\Scripts\python.exe main.py --dry-run --stats 10
 ```
 
 切回游戏，**正常开大**（打训练假人/CD 好了就按 R），盯日志：
@@ -117,7 +120,7 @@ python main.py --dry-run --stats 10
 关掉演练进程（F9 或 Ctrl+C），切回游戏，跑：
 
 ```bash
-python main.py --test-send "测试一下"
+.venv\Scripts\python.exe main.py --test-send "测试一下"
 ```
 
 判据：游戏聊天框里出现「测试一下」并已发送。
@@ -154,7 +157,7 @@ python main.py --test-send "测试一下"
 ## ☐ 7. 全链路：真发一次
 
 ```bash
-python main.py
+.venv\Scripts\python.exe main.py
 ```
 
 - F8 暂停/继续（暂停时仍响应 F9），F9 立即退出
@@ -170,7 +173,7 @@ python main.py
 - 日志在 `logs/300-shout.log`（2MB × 3 轮转），出问题把它带上
 - 进程是一次性常驻前台程序，F9 退出后不留后台服务/守护进程
 - 换英雄前留意：个别英雄 UI 布局不同，R 槽可能移位 → 若换英雄后「一直不触发」，
-  先跑 `python calibrate.py --check`，必要时重新标定（记下是哪几个英雄）
+  先跑 `.venv\Scripts\python.exe calibrate.py --check`，必要时重新标定（记下是哪几个英雄）
 
 **把这几件事记下来交给开发**：①实际窗口标题 ②实际频道机制 ③`--check` 的建议阈值
 ④哪些英雄 R 槽位置不一致 ⑤有没有 `input_method` 需要切 clipboard 的迹象。
