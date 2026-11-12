@@ -49,7 +49,7 @@
 | `sender.py` | 聊天按键序列（unicode / clipboard 两种输入法） |
 | `calibrate.py` | 标定 + 体检 |
 | `main.py` | 编排：配置、主循环、统计、自检、CLI、组装（`build_runtime`，CLI 与面板共用） |
-| `ui.py` | 展示与下发「开始/停止」：Tkinter 单窗口，控件自绘（圆角卡片/按钮/进度条）+ 四套可切换外观（`STYLES`，选完写回 `ui.style`）；顶层不 import tkinter，纯逻辑可离线测 |
+| `ui.py` | 展示与下发「开始/停止」：Tkinter 单窗口，控件自绘（圆角卡片/按钮/进度条/下拉框）+ 四套可切换外观（`STYLES`，选完写回 `ui.style`）；顶层不 import tkinter，纯逻辑可离线测 |
 
 - **语言**：注释、docstring、日志、提交信息一律中文；标识符英文 `snake_case`。
 - **日志**：`logging.getLogger("300-shout.<模块名>")`，模块内不自己配 handler（统一走 `logsetup`）。

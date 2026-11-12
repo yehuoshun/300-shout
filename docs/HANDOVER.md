@@ -250,11 +250,15 @@
     面板用「短标签 + 一句引导」（标签进胶囊，长句单独一行），`status_view()` 保持不变给 CLI 与测试用。
     踩过的坑：`tk.Text`/`tk.Listbox` 默认 `height=24/10` 行，会把窗口最小高度撑到装不下底栏；
     `Canvas` 控件的底色要跟着父容器走，否则圆角处会露出灰底。
-21. **新增** 四套可切换外观（v3.3）：面板右上角「外观」弹菜单选风格，立刻重建窗口并写回
+21. **新增** 四套可切换外观（v3.3）：面板右上角「外观」下拉框选风格，立刻重建窗口并写回
     `config.json` 的 `ui.style`。`ui.py` 里的 `STYLES` 是唯一真源——每套给 19 个配色键（键集必须
     完全一致，少一个就有控件 KeyError）+ 两个圆角 token（`card_radius` / `btn_radius`），
     绘制代码一行都不用改；`resolve_style()` 认不出来的值一律回落 `simple-light`，
     `main.config_warnings()` 也会提醒手改错了。四套：简洁浅色（默认）/ 简洁深色 / 电竞霓虹（近黑+青蓝、方角）/ 纸感米白（暖白+墨绿、大圆角）。
+    下拉用的是自绘 `Select`（`Toplevel` + `overrideredirect` + `grab_set`），不是 `tk.Menu`：
+    系统菜单在深色/霓虹下是一片惨白，正好在「选风格」时最跳；自绘后圆角、悬停底色、✓ 都跟
+    面板同一套配色。坑：`self.tk` 是 Tcl 解释器（`_tkinter.tkapp`）而不是 tkinter 模块，
+    建弹层要写 `tk.Toplevel(self)`。
     写配置复用 `_patch_config()`（读→改→`.tmp`→`os.replace`），只动 `ui.style`，`ui` 段其它键与
     `phrases` 原样保留——面板换风格不该把用户配置洗掉。顺带把 `toggle_theme()`（深浅二选一、不落盘）
     删了：能记住的选择才算功能。踩坑：`tk.Menu` 一旦挂在 `root` 上就会`_build()` 时跟着被销毁，
