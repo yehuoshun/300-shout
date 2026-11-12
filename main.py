@@ -19,14 +19,11 @@ import sys
 import time
 
 from logsetup import setup_logging
+from paths import DEFAULT_CONFIG, LOGS_DIR, REFS_DIR, ensure_config
 
 log = logging.getLogger("300-shout.main")
 
 VERSION = "3.0.0"
-
-ROOT = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_CONFIG = os.path.join(ROOT, "config.json")
-REFS_DIR = os.path.join(ROOT, "refs")
 
 # 内置默认值：config.json 里缺的键用这里的补，老配置文件不必手工升级
 DEFAULT_CFG = {
@@ -64,8 +61,13 @@ def deep_merge(base: dict, override: dict) -> dict:
 
 
 def load_config(path: str = DEFAULT_CONFIG) -> dict:
-    with open(path, encoding="utf-8") as f:
-        user = json.load(f)
+    path = ensure_config(path)
+    try:
+        with open(path, encoding="utf-8") as f:
+            user = json.load(f)
+    except FileNotFoundError:
+        log.warning("找不到配置文件 %s，本次使用内置默认值（首次运行 exe 时属正常）", path)
+        user = {}
     return deep_merge(DEFAULT_CFG, user)
 
 
@@ -397,7 +399,7 @@ def self_test() -> int:
     import numpy as np
     from detect import CooldownDetector
 
-    setup_logging(log_dir=os.path.join(ROOT, "logs"), level=logging.INFO)
+    setup_logging(log_dir=LOGS_DIR, level=logging.INFO)
     log.info("SELF-TEST 开始")
 
     cfg = load_config(DEFAULT_CONFIG)
@@ -563,7 +565,7 @@ def main(argv=None) -> int:
     if args.self_test:
         return self_test()
 
-    setup_logging(log_dir=os.path.join(ROOT, "logs"),
+    setup_logging(log_dir=LOGS_DIR,
                   level=getattr(logging, args.log_level.upper(), logging.INFO))
     log.info("300 Shout %s 启动", VERSION)
 

@@ -18,6 +18,7 @@ sys.path.insert(0, ROOT)
 import calibrate as calib_mod  # noqa: E402
 import guard as guard_mod      # noqa: E402
 import main as main_mod        # noqa: E402
+import paths as paths_mod      # noqa: E402
 import sender as sender_mod    # noqa: E402
 from detect import CooldownDetector  # noqa: E402
 
@@ -509,6 +510,71 @@ def test_check_guard_warns_when_guard_disabled(monkeypatch, capsys):
     monkeypatch.setattr(guard_mod, "foreground_title", lambda: "任意窗口")
     assert main_mod._check_guard(cfg) == 0
     assert "守卫未生效" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------- 路径（打包后仍能读写用户配置）
+
+def test_app_root_points_to_repo_root():
+    assert paths_mod.ROOT == paths_mod.app_root()
+    assert os.path.isfile(os.path.join(paths_mod.ROOT, "main.py"))
+    assert os.path.isfile(paths_mod.DEFAULT_CONFIG)
+    assert os.path.basename(paths_mod.REFS_DIR) == "refs"
+    assert os.path.basename(paths_mod.LOGS_DIR) == "logs"
+
+
+def test_app_root_follows_exe_when_frozen(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(tmp_path / "300-Shout.exe"))
+    monkeypatch.delattr(sys, "_MEIPASS", raising=False)
+    assert paths_mod.app_root() == str(tmp_path)
+    assert paths_mod.bundle_dir() == str(tmp_path)
+    monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path / "_MEI123"), raising=False)
+    assert paths_mod.bundle_dir() == str(tmp_path / "_MEI123")
+
+
+def test_ensure_config_seeds_bundled_default(tmp_path, monkeypatch):
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+    (bundle / "config.json").write_text('{"phrases": ["内置"]}', encoding="utf-8")
+    monkeypatch.setattr(paths_mod, "BUNDLE_DIR", str(bundle))
+    target = tmp_path / "app" / "config.json"
+    assert paths_mod.ensure_config(str(target)) == str(target)
+    assert json.loads(target.read_text(encoding="utf-8")) == {"phrases": ["内置"]}
+
+
+def test_ensure_config_keeps_user_file(tmp_path, monkeypatch):
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+    (bundle / "config.json").write_text('{"a": 1}', encoding="utf-8")
+    monkeypatch.setattr(paths_mod, "BUNDLE_DIR", str(bundle))
+    target = tmp_path / "config.json"
+    target.write_text('{"a": 2}', encoding="utf-8")
+    assert paths_mod.ensure_config(str(target)) == str(target)
+    assert json.loads(target.read_text(encoding="utf-8")) == {"a": 2}
+
+
+def test_ensure_config_without_bundled_copy_is_harmless(tmp_path, monkeypatch):
+    monkeypatch.setattr(paths_mod, "BUNDLE_DIR", str(tmp_path / "nope"))
+    target = tmp_path / "config.json"
+    assert paths_mod.ensure_config(str(target)) == str(target)
+    assert not target.exists()
+
+
+def test_load_config_missing_file_falls_back_to_defaults(tmp_path, monkeypatch):
+    monkeypatch.setattr(main_mod, "ensure_config", lambda p: p)
+    cfg = main_mod.load_config(str(tmp_path / "no-such" / "config.json"))
+    assert cfg["detect"]["confirm_frames"] == main_mod.DEFAULT_CFG["detect"]["confirm_frames"]
+    assert cfg["chat"]["input_method"] == "unicode"
+
+
+def test_load_config_asks_ensure_config_first(tmp_path, monkeypatch):
+    seen = []
+    monkeypatch.setattr(main_mod, "ensure_config", lambda p: (seen.append(p), p)[1])
+    target = tmp_path / "config.json"
+    target.write_text('{"min_interval": 2.5}', encoding="utf-8")
+    cfg = main_mod.load_config(str(target))
+    assert seen == [str(target)]
+    assert cfg["min_interval"] == 2.5
 
 
 if __name__ == "__main__":

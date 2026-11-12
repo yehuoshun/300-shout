@@ -29,11 +29,9 @@ import time
 
 import cv2
 
-log = logging.getLogger("300-shout.calibrate")
+from paths import DEFAULT_CONFIG, REFS_DIR, ROOT
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_CONFIG = os.path.join(ROOT, "config.json")
-REFS_DIR = os.path.join(ROOT, "refs")
+log = logging.getLogger("300-shout.calibrate")
 
 
 # ---------------------------------------------------------------- 核心
