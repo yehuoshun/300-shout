@@ -486,6 +486,27 @@ def _print_windows() -> int:
     return 0
 
 
+def _check_guard(cfg: dict) -> int:
+    """只检查前台窗口是否在白名单里，不发任何键（首验第 1 步用）。"""
+    import guard as guard_mod
+    chat = cfg.get("chat") or {}
+    title = guard_mod.foreground_title()
+    print(f"当前前台窗口: {title!r}")
+    print(f"白名单: {chat.get('foreground_titles') or []}"
+          f"（require_foreground={chat.get('require_foreground', True)}）")
+    guard_fn = build_guard(cfg)
+    if guard_fn is None:
+        print("结果: 守卫未生效（require_foreground=false 或白名单为空），正式模式会无条件发键。")
+        return 0
+    allowed, _ = _ask_guard(guard_fn)
+    if allowed:
+        print("结果: 通过——这个窗口就是将来会被发键的窗口，确认是游戏。")
+        return 0
+    print("结果: 不通过——把游戏切到前台再跑一次；仍不通过就把上面标题里"
+          "的稳定片段填进 chat.foreground_titles。")
+    return 1
+
+
 def _test_send(cfg: dict, text: str, *, no_guard: bool = False) -> int:
     """真机发送测试：只走聊天发送链路，不抓屏、不需要标定。"""
     guard_fn = None if no_guard else build_guard(cfg)
@@ -530,6 +551,8 @@ def main(argv=None) -> int:
     ap.add_argument("--no-guard", action="store_true", help="关闭前台窗口校验")
     ap.add_argument("--no-hotkeys", action="store_true", help="关闭 F8/F9 全局热键")
     ap.add_argument("--list-windows", action="store_true", help="列出窗口标题（配置白名单用）")
+    ap.add_argument("--check-guard", action="store_true",
+                    help="只检查前台窗口是否在白名单里（不发键），首验第 1 步用")
     ap.add_argument("--test-send", metavar="TEXT", default=None,
                     help="真机发送测试：把 TEXT 发到游戏（走同一套守卫/频道逻辑，不抓屏、不用标定）")
     ap.add_argument("--version", action="version", version=f"300-shout {VERSION}")
@@ -547,6 +570,8 @@ def main(argv=None) -> int:
     cfg = load_config(args.config)
     for w in config_warnings(cfg):
         log.warning("配置提醒: %s", w)
+    if args.check_guard:
+        return _check_guard(cfg)
     if args.test_send is not None:
         return _test_send(cfg, args.test_send, no_guard=args.no_guard)
     problems = validate_config(cfg)

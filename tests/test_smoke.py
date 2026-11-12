@@ -490,5 +490,26 @@ def test_grab_screen_tolerates_broken_config(monkeypatch):
     assert calib_mod._grab_screen("nope.json") is not None   # 配置坏了也要能标定
 
 
+def test_check_guard_reports_match(monkeypatch, capsys):
+    cfg = main_mod.deep_merge(main_mod.DEFAULT_CFG, {"chat": {"foreground_titles": ["300英雄"]}})
+    monkeypatch.setattr(guard_mod, "foreground_title", lambda: "300英雄 - 客户端")
+    assert main_mod._check_guard(cfg) == 0
+    assert "通过" in capsys.readouterr().out
+
+
+def test_check_guard_reports_mismatch(monkeypatch, capsys):
+    cfg = main_mod.deep_merge(main_mod.DEFAULT_CFG, {"chat": {"foreground_titles": ["300英雄"]}})
+    monkeypatch.setattr(guard_mod, "foreground_title", lambda: "记事本")
+    assert main_mod._check_guard(cfg) == 1
+    assert "不通过" in capsys.readouterr().out
+
+
+def test_check_guard_warns_when_guard_disabled(monkeypatch, capsys):
+    cfg = main_mod.deep_merge(main_mod.DEFAULT_CFG, {"chat": {"require_foreground": False}})
+    monkeypatch.setattr(guard_mod, "foreground_title", lambda: "任意窗口")
+    assert main_mod._check_guard(cfg) == 0
+    assert "守卫未生效" in capsys.readouterr().out
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))

@@ -87,10 +87,11 @@
 
 ## 4. 待办（接手者第一件事）
 
-按顺序做，每步都有可观测的判据：
+按顺序做，每步都有可观测的判据（可直接给用户照做的陪跑版：`docs/FIRST_RUN.md`）：
 
 - [ ] **1. 查窗口标题**：真机运行 `python main.py --list-windows`，把游戏标题里的稳定片段填进
-      `config.json` 的 `chat.foreground_titles`。判据：`--list-windows` 输出里有游戏窗口
+      `config.json` 的 `chat.foreground_titles`；游戏切到前台用 `python main.py --check-guard`
+      验证（只读标题、不发键，输出「结果: 通过」即 OK）
 - [ ] **2. 标定 + 体检**：`python calibrate.py` 框选 R 槽、采「可用/CD」两态 →
       `python calibrate.py --check` 全绿（无「错误」，警告清零）。判据：体检给出「可以进游戏」
 - [ ] **3. 演练**：`python main.py --dry-run --stats 30`，在游戏里按 R。判据：日志出现
@@ -177,10 +178,11 @@
    + `config_warnings`（提醒）；`pick_phrase` 避免与上一条重复；`crop_roi` 越界夹取
 6. **标定** 新增 `--check` 体检（ROI/基准尺寸一致性、纹理方差、两态可分性、建议阈值），
    GUI 标定结束后自动体检
-7. **测试** 12 → 42 项：多帧确认、零方差告警、NaN 归零、剪贴板发送、标题匹配 fail-closed、
+7. **测试** 12 → 45 项：多帧确认、零方差告警、NaN 归零、剪贴板发送、标题匹配 fail-closed、
    热键边沿、深合并、配置校验/提醒、台词去重、ROI 夹取、标定体检三态、按 fps 补节奏、
    `--test-send` 三态（拦下/发出/发送失败）、发送异常不崩循环、标定预览缩放与坐标换算、
-   文字前缀拼接与校验、标定抓屏走配置显示器；自检增加「守卫拦截」「F9 退出」两个分支
+   文字前缀拼接与校验、标定抓屏走配置显示器、`--check-guard` 三态；
+   自检增加「守卫拦截」「F9 退出」两个分支
 8. **文档** README 重写（安全护栏、参数表、排错表）；HANDOVER 补 §3.4 安全护栏与新待办
 9. **修复（提交后补）** 非阻塞抓帧让主循环少了天然节流，静止画面下 ~30fps 空转吃 CPU：
    `run()` 按 `capture.fps` 计算 `frame_interval`，每轮（含空帧路径）用 `_pace(tick)` 补足间隔；
@@ -194,6 +196,8 @@
     的频道机制，免得再去改代码
 13. **修复** 标定抓屏没读 `capture.output_idx`（写死默认显示器）：多显示器下 ROI 会全错。
     `_grab_screen(config_path)` 现在按配置走，配置读不出来也不影响标定
+14. **新增** `--check-guard`（只读前台标题、不发键，判断白名单是否命中）与
+    `docs/FIRST_RUN.md`（真机首验陪跑清单：8 步，每步带判据与失败对照表）
 
 ### v2（2026-11-11）
 1. **补齐** `main.py`（入口 + 日志 + 主循环 + `--self-test`）、`calibrate.py`（标定，GUI/离线双模式）、`logsetup.py`

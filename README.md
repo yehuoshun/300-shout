@@ -4,6 +4,9 @@
 
 [![CI](https://github.com/yehuoshun/300-shout/actions/workflows/ci.yml/badge.svg)](https://github.com/yehuoshun/300-shout/actions/workflows/ci.yml)
 
+> 第一次上真机？照 [docs/FIRST_RUN.md](docs/FIRST_RUN.md) 一步步走（窗口标题 → 标定 → 演练 →
+> 守卫 → 单发 → 频道 → 全链路），每步都有可观测判据。
+
 ## 功能
 
 - 检测大招（R 技能）施放瞬间：技能图标从「可用态」变为「CD 态」的下降沿
@@ -123,6 +126,7 @@ python main.py --self-test     # 离线跑通 配置→ROI→检测→守卫→�
 | `--no-guard` | 关闭前台窗口校验（**危险**，仅在自己确认窗口时用） |
 | `--no-hotkeys` | 关闭全局热键 |
 | `--list-windows` | 列出当前窗口标题，用来填 `chat.foreground_titles` |
+| `--check-guard` | 只打印当前前台窗口并判断是否在白名单（不发键，首验第 1 步用） |
 | `--test-send TEXT` | 真机发送测试：把 TEXT 发进游戏（不抓屏、不用标定，守卫照常生效） |
 | `--self-test` | 离线自检 |
 | `--config PATH` | 指定配置文件 |
