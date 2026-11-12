@@ -326,6 +326,45 @@ def test_self_test_subprocess():
     assert "SELF-TEST OK" in r.stdout
 
 
+# ------------------------------------------------------------ 标定 GUI 缩放
+def test_display_scale_keeps_small_frames_and_shrinks_big_ones():
+    small = np.zeros((720, 1280, 3), dtype=np.uint8)
+    assert calib_mod._display_scale(small) == 1.0       # 放得下就不缩
+    big = np.zeros((1440, 2560, 3), dtype=np.uint8)     # 2K 全屏：直接弹窗会超出屏幕
+    scale = calib_mod._display_scale(big)
+    assert 0.5 < scale < 1.0
+
+
+def test_scale_roi_back_maps_preview_coords_to_full_resolution():
+    shape = (1440, 2560, 3)
+    scale = 0.625                                        # 1600/2560
+    roi = calib_mod._scale_roi_back((100, 50, 64, 64), scale, shape)
+    assert (roi["right"] - roi["left"]) == 102           # 64 / 0.625 ≈ 102
+    assert (roi["bottom"] - roi["top"]) == 102
+    assert roi["left"] == 160 and roi["top"] == 80
+
+
+def test_scale_roi_back_clamps_to_frame():
+    roi = calib_mod._scale_roi_back((0, 0, 5000, 5000), 1.0, (100, 100, 3))
+    assert roi == {"left": 0, "top": 0, "right": 100, "bottom": 100}
+
+
+def test_select_roi_gui_scales_preview_and_maps_back(monkeypatch):
+    frame = np.zeros((1440, 2560, 3), dtype=np.uint8)
+    seen = {}
+
+    def _fake_select(name, img, showCrosshair=True):
+        seen["shape"] = img.shape
+        return (100, 50, 64, 64)
+
+    monkeypatch.setattr(cv2, "selectROI", _fake_select)
+    monkeypatch.setattr(cv2, "destroyAllWindows", lambda: None)
+    roi = calib_mod._select_roi_gui(frame)
+    h, w = seen["shape"][:2]
+    assert w <= 1600 and h <= 900                     # 预览不会超出 1600×900 的屏幕
+    assert 90 <= roi["right"] - roi["left"] <= 120    # 64 / 0.625 ≈ 102
+
+
 # ------------------------------------------------------------ 真机发送测试
 def test_test_send_refuses_when_foreground_not_allowed(monkeypatch):
     """守卫不放行时，--test-send 必须一次都不发。"""

@@ -25,6 +25,7 @@ import json
 import logging
 import os
 import sys
+import time
 
 import cv2
 
@@ -176,7 +177,6 @@ def _grab_screen():
             frame = cap.grab()
             if frame is not None:
                 return frame
-            import time
             time.sleep(0.1)
         return None
     finally:
@@ -185,13 +185,38 @@ def _grab_screen():
             rel()
 
 
+def _display_scale(frame, max_w: int = 1600, max_h: int = 900) -> float:
+    """预览窗口限尺寸：2K/4K 截图直接弹窗会超出屏幕，框选时拖不到边角。"""
+    h, w = frame.shape[:2]
+    if w <= max_w and h <= max_h:
+        return 1.0
+    return min(max_w / float(w), max_h / float(h))
+
+
+def _scale_roi_back(r, scale: float, shape) -> dict:
+    """把「缩小后的预览窗口」里框出的矩形换算回原始分辨率坐标。"""
+    x, y, w, h = (int(round(v / scale)) for v in r)
+    height, width = shape[:2]
+    return {"left": max(0, x), "top": max(0, y),
+            "right": min(width, x + w), "bottom": min(height, y + h)}
+
+
 def _select_roi_gui(frame) -> dict:
-    r = cv2.selectROI("框选大招图标 (R槽) 后按 Enter", frame, showCrosshair=True)
+    scale = _display_scale(frame)
+    if scale < 1.0:
+        view = cv2.resize(frame, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+        print(f"预览已缩到 {scale * 100:.0f}% 显示（原图 {frame.shape[1]}×{frame.shape[0]}）")
+    else:
+        view = frame
+    r = cv2.selectROI("框选大招图标 (R槽) 后按 Enter", view, showCrosshair=True)
     cv2.destroyAllWindows()
     x, y, w, h = r
     if w == 0 or h == 0:
         raise SystemExit("未选择区域，已取消。")
-    return {"left": int(x), "top": int(y), "right": int(x + w), "bottom": int(y + h)}
+    roi = _scale_roi_back((x, y, w, h), scale, frame.shape)
+    if roi["right"] - roi["left"] < 8 or roi["bottom"] - roi["top"] < 8:
+        raise SystemExit("选区太小（宽高需 ≥8px），已取消。")
+    return roi
 
 
 def interactive(config_path: str) -> int:
