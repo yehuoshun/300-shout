@@ -442,5 +442,53 @@ def test_validate_config_rejects_non_string_prefix():
     assert any("text_prefix" in p for p in main_mod.validate_config(cfg))
 
 
+def test_grab_screen_uses_configured_monitor(monkeypatch):
+    """多显示器时标定必须抓 config.json 指定的那块屏，否则 ROI 全错。"""
+    import capture as capture_mod
+    seen = {}
+
+    class _FakeCap:
+        backend = "fake"
+
+        def __init__(self, **kw):
+            seen.update(kw)
+
+        def grab(self):
+            return np.zeros((4, 4, 3), dtype=np.uint8)
+
+        def release(self):
+            return None
+
+    monkeypatch.setattr(capture_mod, "ScreenCapture", _FakeCap)
+    monkeypatch.setattr(main_mod, "load_config",
+                        lambda *a, **k: {"capture": {"output_idx": 1, "mode": "mss", "fps": 5}})
+    img = calib_mod._grab_screen("dummy.json")
+    assert img is not None
+    assert seen["output_idx"] == 1 and seen["prefer"] == "mss" and seen["fps"] == 5
+
+
+def test_grab_screen_tolerates_broken_config(monkeypatch):
+    import capture as capture_mod
+
+    class _FakeCap:
+        backend = "fake"
+
+        def __init__(self, **kw):
+            self.kw = kw
+
+        def grab(self):
+            return np.zeros((4, 4, 3), dtype=np.uint8)
+
+        def release(self):
+            return None
+
+    def _boom(*a, **k):
+        raise ValueError("配置坏了")
+
+    monkeypatch.setattr(capture_mod, "ScreenCapture", _FakeCap)
+    monkeypatch.setattr(main_mod, "load_config", _boom)
+    assert calib_mod._grab_screen("nope.json") is not None   # 配置坏了也要能标定
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))

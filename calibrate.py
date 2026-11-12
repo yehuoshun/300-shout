@@ -169,9 +169,17 @@ def check_calibration(config_path: str = DEFAULT_CONFIG,
 
 
 # ---------------------------------------------------------------- 交互
-def _grab_screen():
+def _grab_screen(config_path: str = DEFAULT_CONFIG):
+    """抓一帧屏幕。按 config.json 的 capture 段走（多显示器时别抓错屏）。"""
     from capture import ScreenCapture
-    cap = ScreenCapture()
+    import main as main_mod
+    try:
+        cap_cfg = main_mod.load_config(config_path).get("capture") or {}
+    except Exception:  # noqa: BLE001 配置坏了也要能标定
+        cap_cfg = {}
+    cap = ScreenCapture(fps=cap_cfg.get("fps", 10),
+                        output_idx=cap_cfg.get("output_idx", 0),
+                        prefer=cap_cfg.get("mode", "dxcam"))
     try:
         for _ in range(60):
             frame = cap.grab()
@@ -220,7 +228,7 @@ def _select_roi_gui(frame) -> dict:
 
 
 def interactive(config_path: str) -> int:
-    frame = _grab_screen()
+    frame = _grab_screen(config_path)
     if frame is None:
         print("抓屏失败：请确认游戏已运行且捕获后端可用。")
         return 1
@@ -228,12 +236,12 @@ def interactive(config_path: str) -> int:
     print(f"ROI = {roi}")
 
     input("请让大招处于【可用】状态，然后按 Enter 采集『可用态』基准...")
-    ready_img = _crop(_grab_screen(), roi)
+    ready_img = _crop(_grab_screen(config_path), roi)
 
     cd_img = None
     if input("需要同时采集『CD 态』基准吗？(y/N): ").strip().lower() == "y":
         input("请放大招进入 CD，然后按 Enter 采集『CD 态』基准...")
-        cd_img = _crop(_grab_screen(), roi)
+        cd_img = _crop(_grab_screen(config_path), roi)
 
     save_calibration(config_path, roi, ready_img, cd_img)
     print("标定完成，先体检一次：")
