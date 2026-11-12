@@ -1,8 +1,9 @@
-# 300 Shout 🦞
+# 300 Shout
 
 300英雄「开大招自动公屏喊话」工具。纯图像识别方案：**零进程接触、零内存读写、零注入**，反作弊视角下与真人操作无异。
 
 [![CI](https://github.com/yehuoshun/300-shout/actions/workflows/ci.yml/badge.svg)](https://github.com/yehuoshun/300-shout/actions/workflows/ci.yml)
+[![Release](https://github.com/yehuoshun/300-shout/actions/workflows/release.yml/badge.svg)](https://github.com/yehuoshun/300-shout/releases/latest)
 
 > 第一次上真机？照 [docs/FIRST_RUN.md](docs/FIRST_RUN.md) 一步步走（窗口标题 → 标定 → 演练 →
 > 守卫 → 单发 → 频道 → 全链路），每步都有可观测判据。
@@ -51,6 +52,34 @@ flowchart TD
 | 标定 | `calibrate.py` | 截图 → 框选图标 → 采集基准 → 写配置；带 `--check` 体检 |
 | 日志 | `logsetup.py` | 控制台 + 文件（`logs/`，2MB 轮转 ×3） |
 | 入口 | `main.py` | 主循环：捕获→检测→守卫→发送 + 日志/统计/热键 |
+
+## 下载 exe（免装 Python）
+
+不想装 Python 的话，直接去 [Releases](https://github.com/yehuoshun/300-shout/releases/latest) 下
+`300-Shout.exe`（单文件，Windows x64）：
+
+1. 放进**自己有写权限的固定目录**（例如 `D:\Tools\300-Shout\`）——首次运行会在 exe 旁边生成
+   `config.json` 和 `logs\`，配置和标定结果都存在这里；放临时目录或只读目录会丢配置。
+2. 命令与源码版完全一致，把 `.venv\Scripts\python.exe main.py` 换成 `300-Shout.exe` 即可：
+   `300-Shout.exe --list-windows`、`300-Shout.exe --check-guard`、`300-Shout.exe --self-test`。
+3. 标定也在 exe 里：`300-Shout.exe --calibrate`（框选大招图标）→ `300-Shout.exe --calibrate-check`
+   （体检）。标定完 `refs\` 和 `config.json` 就在 exe 旁边。
+
+> exe 用 PyInstaller 打包、未签名，个别杀软会误报；介意就用源码跑。
+> 自动自检（`--self-test`）在 CI 里跑过，**游戏内实际喊话仍需你本地按 [docs/FIRST_RUN.md](docs/FIRST_RUN.md) 验**。
+
+### 自己打包
+
+```bash
+.venv\Scripts\python.exe -m pip install pyinstaller
+.venv\Scripts\python.exe -m PyInstaller --noconfirm --clean --onefile --name 300-Shout ^
+    --add-data "config.json;." --collect-submodules dxcam main.py
+```
+
+> `--add-data` 把默认配置塞进 exe（首次运行释放到 exe 旁）；`--collect-submodules dxcam` 是必须的，
+> dxcam 的后端靠动态导入，静态分析抓不到。打包后的路径规则见 `paths.py`：程序根目录 = exe 所在目录，
+> 内置资源 = 解包目录，所以配置/基准图/日志不会随临时解包目录一起被删。
+> `--calibrate` / `--calibrate-check` 让标定工具也走同一个入口，打包版用户不必再装 Python。
 
 ## 快速开始
 
@@ -128,6 +157,8 @@ pip install -r requirements.txt      # Windows 自动带上 dxcam / pydirectinpu
 | `--list-windows` | 列出当前窗口标题，用来填 `chat.foreground_titles` |
 | `--check-guard` | 只打印当前前台窗口并判断是否在白名单（不发键，首验第 1 步用） |
 | `--test-send TEXT` | 真机发送测试：把 TEXT 发进游戏（不抓屏、不用标定，守卫照常生效） |
+| `--calibrate` | 打开标定工具（等价 `python calibrate.py`）：框选大招图标 + 采基准图。exe 版同样可用 |
+| `--calibrate-check` | 标定体检（等价 `calibrate.py --check`）：尺寸/纹理/两态可分性 + 建议阈值 |
 | `--self-test` | 离线自检 |
 | `--config PATH` | 指定配置文件 |
 | `--log-level L` | 日志级别（默认 INFO） |
@@ -197,6 +228,7 @@ pip install -r requirements.txt      # Windows 自动带上 dxcam / pydirectinpu
 ```text
 300-shout/
 ├── main.py            # 入口：主循环 + 日志 + 统计 + 自检
+├── paths.py           # 路径规则：源码/exe 两套根目录（配置/refs/logs 落在 exe 旁）
 ├── capture.py         # 画面层：dxcam/mss（非阻塞 + 末帧缓存）
 ├── detect.py          # 检测层：模板匹配 + 多帧确认 + 下降沿
 ├── guard.py           # 安全层：前台窗口校验 + 全局热键
@@ -209,7 +241,7 @@ pip install -r requirements.txt      # Windows 自动带上 dxcam / pydirectinpu
 ├── refs/              # 标定生成的基准图（gitignore）
 ├── logs/              # 运行日志（gitignore）
 ├── tests/             # 冒烟测试（离线）
-└── .github/workflows/ # CI
+└── .github/workflows/ # CI（ci.yml 测试 / release.yml 打 tag 出 exe）
 ```
 
 ## 测试与 CI
@@ -217,7 +249,7 @@ pip install -r requirements.txt      # Windows 自动带上 dxcam / pydirectinpu
 ```bash
 python -m venv .venv
 .venv/Scripts/python.exe -m pip install -r requirements.txt -r requirements-dev.txt   # Windows
-.venv/Scripts/python.exe -m pytest -q            # 45 个冒烟测试（离线，< 2s）
+.venv/Scripts/python.exe -m pytest -q            # 53 个冒烟测试（离线，< 2s）
 .venv/Scripts/python.exe main.py --self-test     # 端到端启动自检
 ```
 
@@ -228,6 +260,9 @@ CI（`.github/workflows/ci.yml`）两个任务：
 
 - **start-test**（ubuntu-latest）：编译检查 → 单元测试 → `--self-test` 启动自检
 - **windows-deps**（windows-latest）：装真依赖（dxcam/pydirectinput）→ 导入检查 → 单测 → 自检
+
+`release.yml`：推 `v*` tag（或手动触发）时在 windows-latest 上打包单文件 exe、跑 `--self-test`、
+发到 Releases；手动触发只上传构建产物、不发版。
 
 > CI 只验证「**能启动、逻辑正确**」；**真机（游戏内实际喊话）仍需人工实测**。
 
