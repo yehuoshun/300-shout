@@ -1,0 +1,110 @@
+name: Release
+
+# 打 tag（v3.0.0 这种）时自动打包成单文件 exe 并发到 Releases；
+# 也可以手动触发（workflow_dispatch）只验证打包、不发布。
+on:
+  push:
+    tags: [ "v*" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    name: 打包 exe 并发布
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt "pyinstaller>=6.6"
+
+      - name: 校验 tag 与 VERSION 一致
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $ver = (python -c "import main; print(main.VERSION)").Trim()
+          $tag = "${{ github.ref_name }}".TrimStart("v")
+          if ($ver -ne $tag) {
+            Write-Error "tag ($tag) 与 main.VERSION ($ver) 不一致：先改 VERSION 再打 tag"
+            exit 1
+          }
+          Write-Host "版本一致：$ver"
+
+      - name: PyInstaller 打包（单文件）
+        # --collect-submodules dxcam：dxcam 的后端是动态导入，静态分析抓不到
+        # --add-data config.json：内置一份默认配置，首次运行释放到 exe 旁边
+        run: >
+          pyinstaller --noconfirm --clean --onefile --name 300-Shout
+          --add-data "config.json;."
+          --collect-submodules dxcam
+          --log-level WARN
+          main.py
+
+      - name: 冒烟：exe 自检（离线，不碰显示器/键盘）
+        shell: pwsh
+        run: |
+          $exe = "dist\300-Shout.exe"
+          if (-not (Test-Path $exe)) { Write-Error "没生成 $exe"; exit 1 }
+          $size = "{0:N1} MB" -f ((Get-Item $exe).Length / 1MB)
+          Write-Host "产物大小：$size"
+          & $exe --self-test
+          if ($LASTEXITCODE -ne 0) { Write-Error "self-test 失败（退出码 $LASTEXITCODE）"; exit 1 }
+          & $exe --version
+
+      - name: 生成校验和与压缩包
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash dist\300-Shout.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  300-Shout.exe" | Out-File -Encoding ascii dist\300-Shout.exe.sha256
+          Compress-Archive -Path dist\300-Shout.exe, config.json, docs\FIRST_RUN.md `
+            -DestinationPath dist\300-Shout-windows-x64.zip -Force
+          Get-ChildItem dist | Select-Object Name, Length | Format-Table
+
+      - name: 上传构建产物（手动触发时用）
+        uses: actions/upload-artifact@v4
+        with:
+          name: 300-Shout-windows-x64
+          path: |
+            dist/300-Shout.exe
+            dist/300-Shout.exe.sha256
+            dist/300-Shout-windows-x64.zip
+          if-no-files-found: error
+
+      - name: 发布到 Releases
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/300-Shout.exe
+            dist/300-Shout.exe.sha256
+            dist/300-Shout-windows-x64.zip
+          fail_on_unmatched_files: true
+          body: |
+            ## 这是什么
+            300英雄「开大招自动公屏喊话」的 Windows 单文件版。纯图像识别（DDA 抓屏 + 模板匹配），
+            零进程读写、零注入、零提权：反作弊视角下与真人按 Enter 打字无异。
+
+            ## 怎么用
+            1. 下载 `300-Shout.exe`，放到一个**自己有写权限的固定目录**（例如 `D:\Tools\300-Shout\`），双击运行。
+               首次启动会在 exe 旁边生成 `config.json` 和 `logs\`；配置和标定结果都存在这里，别把 exe 放在只读目录或临时目录。
+            2. 按 `docs/FIRST_RUN.md` 的 8 步走：`--list-windows` 找游戏窗口标题 → 填 `chat.foreground_titles` →
+               切到游戏 `--check-guard` 期望「通过」→ `calibrate.py` 框选大招 R 槽 → `--dry-run --stats 10` 观察触发 →
+               `--test-send "测试一下"` 验证发送 → 频道实测 → 正式 `main.py`。
+               源码版与 exe 版命令一致，把 `python main.py` 换成 `300-Shout.exe` 即可。
+            3. 游戏请用**无边框窗口**：独占全屏时 DDA 抓到的可能是黑屏。
+
+            ## 注意
+            - 未签名 + PyInstaller 打包，个别杀软会报毒（常见于 onefile）。介意可自行克隆仓库用源码跑，或加信任。
+            - 安全护栏默认开启：游戏不在前台时**一次都不会发送**，先 `--check-guard` 确认白名单匹配。
+            - 这份 exe 的自动自检（`--self-test`）在 CI 里跑过；游戏内实际喊话需要你本地按清单验。
+
+            `300-Shout.exe.sha256` 是校验和，`300-Shout-windows-x64.zip` 是 exe + 默认配置 + 首验清单的合集。
