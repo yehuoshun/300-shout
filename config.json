@@ -37,5 +37,8 @@
     "pause": "f8",
     "quit": "f9"
   },
-  "stats_interval": 60
+  "stats_interval": 60,
+  "ui": {
+    "style": "simple-light"
+  }
 }

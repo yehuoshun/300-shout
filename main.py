@@ -45,6 +45,7 @@ DEFAULT_CFG = {
     "max_interval": 3.0,
     "hotkeys": {"pause": "f8", "quit": "f9"},
     "stats_interval": 60,
+    "ui": {"style": "simple-light"},
 }
 
 
@@ -142,6 +143,16 @@ def config_warnings(cfg: dict) -> list:
         warns.append("min_interval 大于 max_interval，内部会自动交换")
     if len([p for p in (cfg.get("phrases") or []) if str(p).strip()]) == 1:
         warns.append("台词池只有 1 条，连续喊话会显得很机械")
+    ui_cfg = cfg.get("ui")
+    style = ui_cfg.get("style") if isinstance(ui_cfg, dict) else None
+    if style not in (None, ""):
+        try:
+            from ui import STYLES as _styles
+        except Exception:  # noqa: BLE001 极简部署里可能没带 ui.py
+            _styles = {}
+        if _styles and style not in _styles:
+            warns.append(f"ui.style={style!r} 不是已知风格（{'/'.join(_styles)}），"
+                         f"面板会回落到 simple-light")
     return warns
 
 
