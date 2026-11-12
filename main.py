@@ -23,7 +23,7 @@ from paths import default_config, default_logs_dir, default_refs_dir, dirs_for, 
 
 log = logging.getLogger("300-shout.main")
 
-VERSION = "3.3.1"
+VERSION = "3.4.0"
 
 # 内置默认值：config.json 里缺的键用这里的补，老配置文件不必手工升级
 DEFAULT_CFG = {
