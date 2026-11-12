@@ -231,7 +231,7 @@ def run(cfg: dict, capture, detector, send_fn, *, clock=time.monotonic,
     pause_key = str(hk.get("pause", "f8")).strip().lower()
     quit_key = str(hk.get("quit", "f9")).strip().lower()
 
-    frames = empty = triggers = sent = blocked = 0
+    frames = empty = triggers = sent = blocked = send_errors = 0
     fired = 0
     paused = False
     stop = False
@@ -289,8 +289,13 @@ def run(cfg: dict, capture, detector, send_fn, *, clock=time.monotonic,
                     if dry_run or send_fn is None:
                         log.info("[DRY-RUN] 检测到大招，本应发送：%s", text)
                     else:
-                        send_fn(text)
-                        sent += 1
+                        try:
+                            send_fn(text)
+                        except Exception as exc:  # noqa: BLE001 发送失败不该让主循环崩掉
+                            send_errors += 1
+                            log.exception("发送失败（累计 %d 次）：%s", send_errors, exc)
+                        else:
+                            sent += 1
                     sleeper(rng.uniform(min_i, max_i))  # 随机间隔，防机械节奏
 
             if next_stats is not None and clock() >= next_stats:
@@ -305,8 +310,9 @@ def run(cfg: dict, capture, detector, send_fn, *, clock=time.monotonic,
         rel = getattr(capture, "release", None)
         if callable(rel):
             rel()
-    log.info("本轮结束：处理 %d 帧，触发 %d 次，发送 %d 次，前台拦下 %d 次%s",
-             frames, triggers, sent, blocked, _score_suffix(detector))
+    log.info("本轮结束：处理 %d 帧，触发 %d 次，发送 %d 次，前台拦下 %d 次%s%s",
+             frames, triggers, sent, blocked, _score_suffix(detector),
+             f"，发送失败 {send_errors} 次" if send_errors else "")
     return fired
 
 
@@ -476,6 +482,36 @@ def _print_windows() -> int:
     return 0
 
 
+def _test_send(cfg: dict, text: str, *, no_guard: bool = False) -> int:
+    """真机发送测试：只走聊天发送链路，不抓屏、不需要标定。"""
+    guard_fn = None if no_guard else build_guard(cfg)
+    if guard_fn is None:
+        log.warning("前台守卫未生效（--no-guard，或 chat.require_foreground / "
+                    "foreground_titles 没配），3 秒后直接发往当前前台窗口……")
+        time.sleep(3.0)
+    else:
+        allowed, title = _ask_guard(guard_fn)
+        if not allowed:
+            log.error("前台窗口 %r 不在白名单 %s，为安全起见不发送；"
+                      "确认当前窗口就是要发的地方，可加 --no-guard。", title,
+                      (cfg.get("chat") or {}).get("foreground_titles"))
+            return 1
+        log.info("前台窗口 %r 通过白名单校验。", title)
+
+    chat = cfg.get("chat") or {}
+    send_fn = build_sender(cfg)
+    log.info("发送测试文本：%r（input_method=%s，频道键=%s）", text,
+             chat.get("input_method", "unicode"), chat.get("channel_keys") or "无")
+    try:
+        send_fn(text)
+    except Exception as exc:  # noqa: BLE001 真机没装 pydirectinput 之类
+        log.exception("发送失败：%s", exc)
+        return 1
+    log.info("发送完成。若游戏里没出现，依次查：①前台确实是游戏 ②chat.input_method 换成 "
+             "clipboard（DirectInput 吞字）③chat.channel_keys（频道对不对）④type_delay 调大")
+    return 0
+
+
 def main(argv=None) -> int:
     _force_utf8_stdio()
     ap = argparse.ArgumentParser(description="300英雄 开大自动公屏喊话（图像识别）")
@@ -490,6 +526,8 @@ def main(argv=None) -> int:
     ap.add_argument("--no-guard", action="store_true", help="关闭前台窗口校验")
     ap.add_argument("--no-hotkeys", action="store_true", help="关闭 F8/F9 全局热键")
     ap.add_argument("--list-windows", action="store_true", help="列出窗口标题（配置白名单用）")
+    ap.add_argument("--test-send", metavar="TEXT", default=None,
+                    help="真机发送测试：把 TEXT 发到游戏（走同一套守卫/频道逻辑，不抓屏、不用标定）")
     ap.add_argument("--version", action="version", version=f"300-shout {VERSION}")
     args = ap.parse_args(argv)
 
@@ -505,6 +543,8 @@ def main(argv=None) -> int:
     cfg = load_config(args.config)
     for w in config_warnings(cfg):
         log.warning("配置提醒: %s", w)
+    if args.test_send is not None:
+        return _test_send(cfg, args.test_send, no_guard=args.no_guard)
     problems = validate_config(cfg)
     for p in problems:
         log.error("配置问题: %s", p)

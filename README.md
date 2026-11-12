@@ -81,7 +81,13 @@ python main.py --dry-run --stats 30    # 只检测不发送，每 30s 打印相�
 - 若 `ready` 一直 ≈ 1.0 且从不掉下来 → 框选的区域没有 CD 变化，重新标定
 - 若 `ready` 一直在阈值附近抖动 → `--stats` 的记录能看出该把阈值定在哪
 
-确认检测正常后再实战：
+确认检测正常后，先单独验证「发得出」（不用等真触发）：
+
+```bash
+python main.py --test-send "测试一下"    # 切到游戏，回车发出去应该能看到这句话
+```
+
+发得出来后实战：
 
 ```bash
 python main.py                    # 默认每 60s 打印一次统计
@@ -114,6 +120,7 @@ python main.py --self-test     # 离线跑通 配置→ROI→检测→守卫→�
 | `--no-guard` | 关闭前台窗口校验（**危险**，仅在自己确认窗口时用） |
 | `--no-hotkeys` | 关闭全局热键 |
 | `--list-windows` | 列出当前窗口标题，用来填 `chat.foreground_titles` |
+| `--test-send TEXT` | 真机发送测试：把 TEXT 发进游戏（不抓屏、不用标定，守卫照常生效） |
 | `--self-test` | 离线自检 |
 | `--config PATH` | 指定配置文件 |
 | `--log-level L` | 日志级别（默认 INFO） |
@@ -224,7 +231,8 @@ CI（`.github/workflows/ci.yml`）两个任务：
 | 现象 | 排查 |
 |------|------|
 | 一直不触发 | `calibrate.py --check` 看纹理/尺寸/两态可分性；`--dry-run --stats` 看 ready/cd 分数 |
-| 触发但没喊出来 | 看日志有没有「前台窗口 … 不在白名单」（被守卫拦下）；用 `--list-windows` 查标题 |
+| 触发但没喊出来 | 看日志有没有「前台窗口 … 不在白名单」（被守卫拦下）；用 `--list-windows` 查标题；再用 `--test-send "测试"` 单独验发送链路 |
+| `--test-send` 也发不出 | `chat.input_method` 改 `clipboard`；确认游戏的聊天频段（`chat.channel_keys`）；确认 `open_key` 是游戏里开聊天框的那个键 |
 | 喊出来是半句/乱码 | `chat.input_method` 改 `clipboard`；或加大 `type_delay` |
 | 日志刷「抓不到画面」 | dxcam 初始化 1~2s 属正常；持续 60s 无帧则检查显卡 DDA/是否独占全屏 |
 | 主循环卡住没反应 | v3 已改非阻塞抓帧；若仍卡，看日志是否停在「抓帧失败」 |

@@ -326,5 +326,60 @@ def test_self_test_subprocess():
     assert "SELF-TEST OK" in r.stdout
 
 
+# ------------------------------------------------------------ 真机发送测试
+def test_test_send_refuses_when_foreground_not_allowed(monkeypatch):
+    """守卫不放行时，--test-send 必须一次都不发。"""
+    cfg = main_mod.deep_merge(main_mod.DEFAULT_CFG, {"chat": {"foreground_titles": ["300英雄"]}})
+    monkeypatch.setattr(main_mod, "build_guard", lambda c: (lambda: (False, "记事本")))
+    sent = []
+    monkeypatch.setattr(main_mod, "build_sender", lambda c: sent.append)
+    assert main_mod._test_send(cfg, "你好") == 1
+    assert sent == []
+
+
+def test_test_send_sends_plain_text_when_allowed(monkeypatch):
+    cfg = main_mod.deep_merge(main_mod.DEFAULT_CFG, {"chat": {"foreground_titles": ["300英雄"]}})
+    monkeypatch.setattr(main_mod, "build_guard", lambda c: (lambda: (True, "300英雄")))
+    sent = []
+    monkeypatch.setattr(main_mod, "build_sender", lambda c: sent.append)
+    assert main_mod._test_send(cfg, "测试台词") == 0
+    assert sent == ["测试台词"]
+
+
+def test_test_send_reports_send_failure(monkeypatch):
+    cfg = main_mod.deep_merge(main_mod.DEFAULT_CFG, {"chat": {"foreground_titles": ["300英雄"]}})
+    monkeypatch.setattr(main_mod, "build_guard", lambda c: (lambda: (True, "300英雄")))
+
+    def _boom(text):
+        raise RuntimeError("pydirectinput 不可用")
+
+    monkeypatch.setattr(main_mod, "build_sender", lambda c: _boom)
+    assert main_mod._test_send(cfg, "测试台词") == 1
+
+
+def test_run_survives_send_error():
+    """发送抛异常（键盘库缺失/权限问题）不能让主循环整个崩掉。"""
+    cfg = main_mod.deep_merge(main_mod.DEFAULT_CFG, {
+        "roi": {"left": 0, "top": 0, "right": 8, "bottom": 8},
+        "phrases": ["台词一"], "min_interval": 0, "max_interval": 0,
+    })
+
+    class _Det:
+        def __init__(self):
+            self.n = 0
+
+        def update(self, icon, now):
+            self.n += 1
+            return self.n == 1
+
+    def _boom(text):
+        raise RuntimeError("模拟键盘库报错")
+
+    frame = np.zeros((10, 10, 3), dtype=np.uint8)
+    fired = main_mod.run(cfg, main_mod._FakeCapture([frame] * 2), _Det(), _boom,
+                         clock=lambda: 0.0, sleeper=lambda *_: None, max_frames=2)
+    assert fired == 1        # 触发并放行了，只是发送失败被吃掉
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
