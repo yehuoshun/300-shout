@@ -568,6 +568,181 @@ def _make_kit():
                 self.configure(width=max(self._measure() + 2 * self.PAD_X, self.min_width))
                 self._paint()
 
+    class Select(tk.Canvas):
+        """自绘下拉框：显示当前值 + 箭头，点开是一张跟当前风格同色的选项列表。
+
+        刻意不用 tk.Menu：系统菜单在深色/霓虹下是一片惨白，偏偏选风格时最跳；
+        这里连列表的圆角、悬停底色、选中打勾都跟面板一致。
+        """
+
+        def __init__(self, parent, palette, options, value, command, px,
+                     font_size=12, height=30, radius=9, min_width=150, row_height=32):
+            self.palette = palette
+            self.px = px
+            self.options = [(k, lbl) for k, lbl in options]   # [(键, 显示名)]
+            self.value = value
+            self.command = command
+            self.font_size = font_size
+            self.height = height
+            self.radius = radius
+            self.min_width = min_width
+            self.row_height = row_height
+            self._hover = False
+            self._popup = None
+            self._popup_canvas = None
+            self._font = tkfont.Font(family=UI, size=-font_size)
+            super().__init__(parent, width=max(min_width, self._measure()), height=height,
+                             bg=palette["bg"], highlightthickness=0, bd=0, cursor="hand2")
+            self.bind("<Enter>", lambda _e: self._set_hover(True))
+            self.bind("<Leave>", lambda _e: self._set_hover(False))
+            self.bind("<Button-1>", lambda _e: self.toggle())
+            self.bind("<Configure>", lambda _e: self._paint())
+            self._paint()
+
+        # -- 外观 --------------------------------------------------
+        def label(self) -> str:
+            for key, lbl in self.options:
+                if key == self.value:
+                    return lbl
+            return self.options[0][1] if self.options else ""
+
+        def _measure(self, widest=False) -> int:
+            names = [lbl for _k, lbl in self.options] if widest else [self.label()]
+            text_w = max([self._font.measure(n) for n in names] or [0])
+            return text_w + self.px(13) + self.px(30)       # 左内边距 + 右侧箭头区
+
+        def _set_hover(self, on: bool):
+            if on != self._hover:
+                self._hover = on
+                self._paint()
+
+        def _paint(self):
+            p = self.palette
+            w, h = self.winfo_width(), self.height
+            self.delete("all")
+            if w < 20:
+                return
+            edge = self.px(1)
+            fill = p["select"] if self._hover else p["surface"]
+            _round_rect(self, 0, 0, w - 1, h - 1, self.radius, p["border"], "s")
+            _round_rect(self, edge, edge, w - 1 - edge, h - 1 - edge,
+                        max(1, self.radius - edge), fill, "s")
+            self.create_text(self.px(13), h / 2, text=self.label(), anchor="w",
+                             fill=p["text"], font=(UI, -self.font_size), tags="s")
+            self.create_text(w - self.px(14), h / 2 + self.px(1), text="▾", anchor="e",
+                             fill=p["accent"] if self._hover else p["muted"],
+                             font=(UI, -self.font_size), tags="s")
+
+        # -- 开合 --------------------------------------------------
+        def toggle(self):
+            if self._popup is not None:
+                self._close()
+            else:
+                self._open()
+
+        def _open(self):
+            p = self.palette
+            pad = self.px(6)
+            row_h = self.row_height
+            w = max(self.winfo_width(), self._measure(widest=True) + self.px(16))
+            h = len(self.options) * row_h + 2 * pad
+            top = tk.Toplevel(self)
+            top.overrideredirect(True)
+            try:
+                top.attributes("-topmost", True)
+            except Exception:                                    # pragma: no cover
+                pass
+            x = self.winfo_rootx()
+            y = self.winfo_rooty() + self.winfo_height() + self.px(3)
+            if y + h > top.winfo_screenheight() - self.px(10):    # 底下放不开就往上弹
+                y = self.winfo_rooty() - h - self.px(3)
+            top.geometry(f"{w}x{h}+{x}+{y}")
+            canvas = tk.Canvas(top, width=w, height=h, bg=p["bg"],
+                               highlightthickness=0, bd=0)
+            canvas.pack()
+            self._popup, self._popup_canvas = top, canvas
+            canvas.bind("<Motion>", self._on_motion)
+            canvas.bind("<Leave>", lambda _e: self._paint_popup(None))
+            canvas.bind("<Button-1>", self._on_click)
+            top.bind("<Escape>", lambda _e: self._close())
+            top.bind("<FocusOut>", lambda _e: self._close())
+            self._paint_popup(-1)          # 刚打开时不算悬停，只标出当前值
+            try:
+                top.grab_set()                                   # 点窗口外也能收到，才能关
+            except Exception:                                    # pragma: no cover
+                pass
+            top.focus_force()
+
+        def _close(self):
+            top, self._popup = self._popup, None
+            self._popup_canvas = None
+            if top is None:
+                return
+            try:
+                top.grab_release()
+            except Exception:                                    # pragma: no cover
+                pass
+            try:
+                top.destroy()
+            except Exception:                                    # pragma: no cover
+                pass
+
+        def _index(self, y=None):
+            if not self.options:
+                return None
+            i = 0 if y is None else int((y - self.px(6)) // self.row_height)
+            return i if 0 <= i < len(self.options) else None
+
+        def _on_motion(self, event):
+            self._paint_popup(self._index(event.y))
+
+        def _on_click(self, event):
+            c = self._popup_canvas
+            if c is None:
+                return
+            inside = 0 <= event.x < int(c.cget("width")) and 0 <= event.y < int(c.cget("height"))
+            idx = self._index(event.y)
+            if not inside or idx is None:
+                self._close()
+                return
+            self._choose(idx)
+
+        def _choose(self, index: int):
+            """点中第 index 项：先落值再回调（回调可能整窗重建，本控件会被销毁）。"""
+            key = self.options[index][0]
+            self._close()
+            if key == self.value:
+                return
+            self.value = key
+            self.command(key)
+
+        def _paint_popup(self, hover):
+            c = self._popup_canvas
+            if c is None:
+                return
+            p = self.palette
+            pad, row_h = self.px(6), self.row_height
+            w, h = int(c.cget("width")), int(c.cget("height"))
+            edge = self.px(1)
+            c.delete("all")
+            _round_rect(c, 0, 0, w - 1, h - 1, self.px(10), p["border"], "m")
+            _round_rect(c, edge, edge, w - 1 - edge, h - 1 - edge, self.px(9), p["surface"], "m")
+            for i, (key, lbl) in enumerate(self.options):
+                y0 = pad + i * row_h
+                chosen = key == self.value
+                if i == hover:
+                    _round_rect(c, pad, y0, w - pad, y0 + row_h - self.px(2),
+                                self.px(7), p["select"], "m")
+                if chosen:
+                    c.create_text(pad + self.px(11), y0 + row_h / 2 - self.px(1), text="✓",
+                                  anchor="w", fill=p["accent"],
+                                  font=(UI, -self.font_size, "bold"), tags="m")
+                c.create_text(pad + self.px(31), y0 + row_h / 2 - self.px(1), text=lbl,
+                              anchor="w",
+                              fill=p["accent"] if (chosen or i == hover) else p["text"],
+                              font=(UI, -self.font_size, "bold" if chosen else "normal"),
+                              tags="m")
+
     class Pill(tk.Canvas):
         """状态胶囊：一个圆点 + 一句话，底色是语义色的淡版。"""
 
@@ -674,7 +849,7 @@ def _make_kit():
             self.bar.set(value, threshold)
 
     return {"tk": tk, "UI": UI, "MONO": MONO, "Card": Card, "Well": Well,
-            "Button": Button, "Pill": Pill, "Bar": Bar, "Metric": Metric}
+            "Button": Button, "Select": Select, "Pill": Pill, "Bar": Bar, "Metric": Metric}
 
 
 def kit():
@@ -782,14 +957,16 @@ class Panel:
 
         tools = tk.Frame(head, bg=P["bg"])
         tools.grid(row=0, column=2, rowspan=2, sticky="e")
-        self._style_var = tk.StringVar(master=self.root, value=self.style)
-        self.btn_style = K["Button"](tools, P, f"外观 · {self.spec['label']}",
-                                     command=self._open_style_menu, kind="secondary",
-                                     font_size=self.px(12), height=self.px(30),
-                                     radius=self.px(max(6, self.spec["btn_radius"] - 1)),
-                                     min_width=self.px(124))
-        self.btn_style.pack(side="right")
-        self._ver_chip(tools, P, K).pack(side="right", padx=(0, self.px(8)))
+        self.select_style = K["Select"](
+            tools, P, [(key, spec["label"]) for key, spec in STYLES.items()],
+            self.style, self.set_style, self.px,
+            font_size=self.px(12), height=self.px(30),
+            radius=self.px(max(6, self.spec["btn_radius"] - 1)),
+            min_width=self.px(146), row_height=self.px(32))
+        self.select_style.pack(side="right")
+        tk.Label(tools, text="外观", bg=P["bg"], fg=P["muted"],
+                 font=(K["UI"], -self.px(12))).pack(side="right", padx=(0, self.px(8)))
+        self._ver_chip(tools, P, K).pack(side="right", padx=(0, self.px(16)))
 
         # ---- 卡片行：状态 + 台词池 ----
         cards = tk.Frame(root, bg=P["bg"])
@@ -1077,26 +1254,6 @@ class Panel:
             self.log_text.configure(state="normal")
             self.log_text.delete("1.0", "end")
             self.log_text.configure(state="disabled")
-
-    def _build_style_menu(self):
-        """外观菜单单独建好返回（便于测试：菜单项顺序必须与 STYLES 一致）。"""
-        self._style_var.set(self.style)
-        menu = self.tk.Menu(self.root, tearoff=0)
-        for key, spec in STYLES.items():
-            menu.add_radiobutton(label=f"{spec['label']}   ·   {spec['hint']}", value=key,
-                                 variable=self._style_var,
-                                 command=lambda k=key: self.set_style(k))
-        return menu
-
-    def _open_style_menu(self):
-        """点「外观」弹系统菜单：四套风格单选，选完立刻重建窗口并记进配置。"""
-        menu = self._build_style_menu()
-        x = self.btn_style.winfo_rootx()
-        y = self.btn_style.winfo_rooty() + self.btn_style.winfo_height() + self.px(2)
-        try:
-            menu.tk_popup(x, y)
-        finally:
-            menu.grab_release()
 
     def set_style(self, key):
         key = resolve_style(key)

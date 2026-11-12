@@ -734,9 +734,9 @@ def test_save_ui_style_keeps_other_keys(tmp_path):
     assert json.loads(cfg_path.read_text(encoding="utf-8"))["ui"]["style"] == ui_mod.DEFAULT_STYLE
 
 
-def test_panel_style_menu_writes_config(tmp_path):
-    """真窗口才跑（CI 的 ubuntu 没有图形环境会自动跳过）：菜单项与 STYLES 一一对应，
-    选中后写回配置、重建窗口也不许丢日志。"""
+def test_panel_style_dropdown_writes_config(tmp_path):
+    """真窗口才跑（CI 的 ubuntu 没有图形环境会自动跳过）：下拉项与 STYLES 同序，
+    点选后写回配置、重建窗口也不许丢日志，弹层能开能关。"""
     tk = pytest.importorskip("tkinter")
     try:
         tk.Tk().destroy()
@@ -749,17 +749,28 @@ def test_panel_style_menu_writes_config(tmp_path):
     panel = ui_mod.Panel(tk, str(cfg_path))
     try:
         panel.append_log("先留一行日志")
-        menu = panel._build_style_menu()
         keys = list(ui_mod.STYLES)
-        assert menu.index("end") + 1 == len(keys), "菜单项必须与 STYLES 同序同数"
-        menu.invoke(len(keys) - 1)
+        opts = panel.select_style.options
+        assert [k for k, _ in opts] == keys, "下拉项必须与 STYLES 同序同数"
+        assert panel.select_style.label() == ui_mod.STYLES[keys[0]]["label"]
+
+        panel.select_style.toggle()          # 是自绘弹层，不是系统菜单
+        panel.root.update()
+        assert panel.select_style._popup is not None
+        panel.select_style._close()
+        panel.root.update()
+        assert panel.select_style._popup is None
+
+        panel.select_style._choose(len(keys) - 1)   # 选最后一项（弹层里点它同一条路径）
         panel.root.update()
         assert panel.style == keys[-1]
         assert panel.palette == ui_mod.STYLES[keys[-1]]["palette"]
+        assert panel.select_style.label() == ui_mod.STYLES[keys[-1]]["label"]
         saved = json.loads(cfg_path.read_text(encoding="utf-8"))
         assert saved["ui"]["style"] == keys[-1]
         assert saved["phrases"] == ["台词一"]
         assert any("先留一行日志" in line for line in panel.log_lines), "重建窗口不能丢日志"
+        assert any("外观换成了" in line for line in panel.log_lines)
     finally:
         panel.root.destroy()
 
