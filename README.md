@@ -59,10 +59,28 @@ flowchart TD
 
 ![控制面板](docs/ui-panel.png)
 
-界面是自绘的卡片式布局（圆角卡片 / 按钮 / 进度条都用标准库 Canvas 画，不引第三方 UI 库），
-右上角一键切深色：
+界面是自绘的卡片式布局（圆角卡片 / 按钮 / 进度条都用标准库 Canvas 画，不引第三方 UI 库）。
 
-![深色主题](docs/ui-panel-dark.png)
+### 四套外观，右上角「外观」随时换
+
+点右上角「外观 · 简洁 · 浅色」弹出菜单选一套即可，**选完立刻生效并写回 `config.json`
+的 `ui.style`**，下次开面板还是这套（不会每次都回到默认）：
+
+| 风格 | 键值 | 长相 |
+|---|---|---|
+| 简洁 · 浅色 | `simple-light` | 白卡片、蓝色主按钮，最克制（默认） |
+| 简洁 · 深色 | `simple-dark` | 夜战不刺眼 |
+| 电竞 · 霓虹 | `neon` | 近黑底 + 青蓝光，方角，偏「游戏工具」 |
+| 纸感 · 米白 | `paper` | 暖白底 + 墨绿，圆角更大，偏「安静」 |
+
+| 简洁 · 深色 | 电竞 · 霓虹 |
+|---|---|
+| ![深色](docs/ui-panel-dark.png) | ![霓虹](docs/ui-panel-neon.png) |
+
+![纸感米白](docs/ui-panel-paper.png)
+
+> 四套用的都是同一套控件与布局，只换配色和两个圆角 token——加一套新风格大约 20 行
+> （`ui.py` 里的 `STYLES`），不用碰绘制代码。
 
 - **状态胶囊 + 一句引导**：未标定 / 已停止 / 启动中 / 监控中 / 待命中 / 冷却中，下面那行直接写「下一步该干什么」
 - **实时分数**：`大招待命 ready` 与 `冷却中 cd` 两个大数字 + 进度条，阈值刻度直接画在条上
@@ -70,7 +88,7 @@ flowchart TD
 - **台词池编辑**：增删台词，直接写回 `config.json`（其余配置键原样保留）
 - **运行日志**：和 `logs/300-shout.log` 同步滚动，时间 / 级别 / 内容分色，超过 400 行自动裁旧
 - **发送测试**：单独验一次聊天链路，不用等开大
-- **深浅主题**：右上角「深色 / 浅色」切换，只在内存里换，不写配置、不改文件
+- **四套外观**：右上角「外观」切换（简洁浅/深、电竞霓虹、纸感米白），选完写回 `config.json`
 
 关窗即退出，不常驻、不托盘、不开后台服务、不联网——和命令行版是同一条红线。
 想回到纯命令行：`300-Shout.exe --no-ui --dry-run --stats 5`；源码版是
@@ -217,6 +235,7 @@ pip install -r requirements.txt      # Windows 自动带上 dxcam / pydirectinpu
 | `min/max_interval` | 触发间隔随机范围 | 1.5-3.0 |
 | `hotkeys.pause/quit` | 暂停/退出热键 | f8 / f9 |
 | `stats_interval` | 默认统计间隔（秒） | 60 |
+| `ui.style` | 面板外观：`simple-light` / `simple-dark` / `neon` / `paper`（面板里点「外观」会自动写） | `simple-light` |
 
 ### 前台窗口白名单
 
@@ -278,7 +297,7 @@ pip install -r requirements.txt      # Windows 自动带上 dxcam / pydirectinpu
 ```bash
 python -m venv .venv
 .venv/Scripts/python.exe -m pip install -r requirements.txt -r requirements-dev.txt   # Windows
-.venv/Scripts/python.exe -m pytest -q            # 67 个冒烟测试（离线，< 2s）
+.venv/Scripts/python.exe -m pytest -q            # 72 个冒烟测试（离线，< 2s；面板菜单那 1 项要真窗口，CI 跳过）
 .venv/Scripts/python.exe main.py --self-test     # 端到端启动自检
 ```
 
