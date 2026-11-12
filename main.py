@@ -23,7 +23,7 @@ from paths import DEFAULT_CONFIG, LOGS_DIR, REFS_DIR, ensure_config
 
 log = logging.getLogger("300-shout.main")
 
-VERSION = "3.0.0"
+VERSION = "3.1.0"
 
 # 内置默认值：config.json 里缺的键用这里的补，老配置文件不必手工升级
 DEFAULT_CFG = {
@@ -213,7 +213,8 @@ def _score_suffix(detector) -> str:
 
 def run(cfg: dict, capture, detector, send_fn, *, clock=time.monotonic,
         sleeper=time.sleep, max_frames=None, max_empty_frames=0, rng=None,
-        guard=None, hotkeys=None, dry_run=False, stats_seconds: float = 0.0) -> int:
+        guard=None, hotkeys=None, dry_run=False, stats_seconds: float = 0.0,
+        stop_event=None, on_event=None) -> int:
     """主循环：抓帧 → 裁 ROI → 检测 → 触发喊话。返回「触发并放行」的次数。
 
     ``max_frames``：处理多少张有效帧后退出（None = 常驻）。
@@ -224,6 +225,8 @@ def run(cfg: dict, capture, detector, send_fn, *, clock=time.monotonic,
     ``guard``：可选，返回 (是否允许发送, 前台窗口标题)。游戏不在前台时不喊。
     ``hotkeys``：可选，带 ``poll()`` 的热键观察者（F8 暂停 / F9 退出）。
     ``dry_run``：只记录「本应发送」，绝不碰键盘。
+    ``stop_event``：可选 ``threading.Event``，置位后下一帧退出（图形面板用）。
+    ``on_event``：可选回调 ``on_event(kind, payload)``，把实时状态推给界面。
     """
     rng = rng or random.Random()
     min_i = float(cfg.get("min_interval", 1.5))
@@ -245,13 +248,31 @@ def run(cfg: dict, capture, detector, send_fn, *, clock=time.monotonic,
     fps = max(1, _as_int((cfg.get("capture") or {}).get("fps"), 10))
     frame_interval = 1.0 / fps  # 抓帧是非阻塞的，必须自己补足节奏，否则空转吃满 CPU
 
+    def _emit(kind: str, **payload) -> None:
+        """把实时状态推给界面；没有回调时什么都不做，出异常也不影响主循环。"""
+        if on_event is None:
+            return
+        try:
+            on_event(kind, payload)
+        except Exception:  # noqa: BLE001 界面回调出错不该中断识别
+            log.debug("界面回调异常（已忽略）", exc_info=True)
+
+    def _counters() -> dict:
+        return {"frames": frames, "empty": empty, "triggers": triggers,
+                "sent": sent, "blocked": blocked, "errors": send_errors}
+
     def _pace(started: float) -> None:
         wait = frame_interval - (clock() - started)
         if wait > 0:
             sleeper(wait)
+        _emit("tick", **_counters())
 
+    _emit("start", fps=fps, dry=bool(dry_run or send_fn is None))
     try:
         while not stop and (max_frames is None or frames < max_frames):
+            if stop_event is not None and stop_event.is_set():
+                log.info("收到停止请求，主循环退出。")
+                break
             tick = clock()
             if hotkeys is not None:
                 for key in hotkeys.poll():
@@ -281,6 +302,7 @@ def run(cfg: dict, capture, detector, send_fn, *, clock=time.monotonic,
             if detector.update(icon, clock()):
                 triggers += 1
                 allowed, title = _ask_guard(guard)
+                text = None
                 if not allowed:
                     blocked += 1
                     log.warning("检测到大招，但前台窗口 %r 不在白名单 %s，本次不发送"
@@ -302,6 +324,8 @@ def run(cfg: dict, capture, detector, send_fn, *, clock=time.monotonic,
                         else:
                             sent += 1
                     sleeper(rng.uniform(min_i, max_i))  # 随机间隔，防机械节奏
+                _emit("trigger", allowed=allowed, title=title, text=text,
+                      dry=bool(dry_run or send_fn is None))
 
             if next_stats is not None and clock() >= next_stats:
                 next_stats = clock() + stats_seconds
@@ -315,6 +339,7 @@ def run(cfg: dict, capture, detector, send_fn, *, clock=time.monotonic,
         rel = getattr(capture, "release", None)
         if callable(rel):
             rel()
+    _emit("stop", **_counters())
     log.info("本轮结束：处理 %d 帧，触发 %d 次，发送 %d 次，前台拦下 %d 次%s%s",
              frames, triggers, sent, blocked, _score_suffix(detector),
              f"，发送失败 {send_errors} 次" if send_errors else "")
@@ -322,6 +347,32 @@ def run(cfg: dict, capture, detector, send_fn, *, clock=time.monotonic,
 
 
 # ---------------------------------------------------------------- 组装
+def build_runtime(cfg: dict, *, dry_run: bool = False, no_guard: bool = False,
+                  no_hotkeys: bool = False):
+    """按配置组装捕获/检测/发送/守卫/热键，返回 (cap, det, send_fn, guard_fn, hotkeys)。
+
+    命令行与图形面板共用这里，避免两边各写一套。``cap.backend == "none"``
+    表示没有可用捕获后端，调用方应判错；``dry_run`` 下 send_fn 为 None。
+    """
+    from capture import ScreenCapture
+    from detect import CooldownDetector
+
+    ready_ref, cd_ref = load_refs()
+    det_cfg = cfg.get("detect") or {}
+    cap_cfg = cfg.get("capture") or {}
+    cap = ScreenCapture(fps=cap_cfg.get("fps", 10),
+                        output_idx=cap_cfg.get("output_idx", 0),
+                        prefer=cap_cfg.get("mode", "dxcam"))
+    det = CooldownDetector(ready_ref, cd_ref,
+                           threshold=float(det_cfg.get("threshold", 0.8)),
+                           lock_seconds=float(det_cfg.get("lock_seconds", 3.0)),
+                           confirm_frames=int(det_cfg.get("confirm_frames", 2)))
+    guard_fn = None if no_guard else build_guard(cfg)
+    hotkeys = None if no_hotkeys else build_hotkeys(cfg)
+    send_fn = None if dry_run else build_sender(cfg)
+    return cap, det, send_fn, guard_fn, hotkeys
+
+
 def build_sender(cfg: dict):
     """按配置组装发送回调。"""
     import sender as sender_mod
@@ -539,6 +590,17 @@ def _test_send(cfg: dict, text: str, *, no_guard: bool = False) -> int:
     return 0
 
 
+def _launch_ui(config_path: str) -> int:
+    """打开图形控制面板；tkinter 缺失（精简 Python）时退回命令行并说明。"""
+    try:
+        import ui
+    except ImportError as exc:
+        log.error("图形面板不可用（%s）。可以用命令行：main.py --help；"
+                  "标定用 --calibrate。", exc)
+        return 2
+    return ui.launch(config_path)
+
+
 def main(argv=None) -> int:
     _force_utf8_stdio()
     ap = argparse.ArgumentParser(description="300英雄 开大自动公屏喊话（图像识别）")
@@ -561,6 +623,10 @@ def main(argv=None) -> int:
                     help="打开标定工具（等价 python calibrate.py）：框选大招图标并采基准图")
     ap.add_argument("--calibrate-check", action="store_true",
                     help="标定体检（等价 calibrate.py --check）：尺寸/纹理/两态可分性 + 建议阈值")
+    ap.add_argument("--ui", action="store_true",
+                    help="打开图形控制面板（双击 exe 无参数时默认就是这个）")
+    ap.add_argument("--no-ui", action="store_true",
+                    help="无参数时也不开面板，直接走命令行主循环")
     ap.add_argument("--version", action="version", version=f"300-shout {VERSION}")
     args = ap.parse_args(argv)
 
@@ -584,6 +650,10 @@ def main(argv=None) -> int:
     cfg = load_config(args.config)
     for w in config_warnings(cfg):
         log.warning("配置提醒: %s", w)
+
+    # 双击 exe（无任何参数）默认开面板：没有它就看不出该干什么，只能看一闪而过的控制台
+    if args.ui or (not args.no_ui and argv is None and len(sys.argv) == 1):
+        return _launch_ui(args.config)
     if args.check_guard:
         return _check_guard(cfg)
     if args.test_send is not None:
@@ -596,26 +666,11 @@ def main(argv=None) -> int:
                   "若提示 roi 未标定，先跑 --calibrate（源码版：python calibrate.py）。", len(problems))
         return 2
 
-    from capture import ScreenCapture
-    from detect import CooldownDetector
-
-    ready_ref, cd_ref = load_refs()
-    det_cfg = cfg.get("detect") or {}
-    cap_cfg = cfg.get("capture") or {}
-    cap = ScreenCapture(fps=cap_cfg.get("fps", 10),
-                        output_idx=cap_cfg.get("output_idx", 0),
-                        prefer=cap_cfg.get("mode", "dxcam"))
+    cap, det, send_fn, guard_fn, hotkeys = build_runtime(
+        cfg, dry_run=args.dry_run, no_guard=args.no_guard, no_hotkeys=args.no_hotkeys)
     if cap.backend == "none":
         log.error("没有可用的捕获后端（dxcam 需 Windows；mss 需窗口化/有显示环境）。")
         return 3
-
-    det = CooldownDetector(ready_ref, cd_ref,
-                           threshold=float(det_cfg.get("threshold", 0.8)),
-                           lock_seconds=float(det_cfg.get("lock_seconds", 3.0)),
-                           confirm_frames=int(det_cfg.get("confirm_frames", 2)))
-    guard_fn = None if args.no_guard else build_guard(cfg)
-    hotkeys = None if args.no_hotkeys else build_hotkeys(cfg)
-    send_fn = None if args.dry_run else build_sender(cfg)
 
     log.info("就绪：捕获后端=%s，台词池 %d 条，前台守卫=%s，热键=%s%s",
              cap.backend, len(cfg.get("phrases") or []),
