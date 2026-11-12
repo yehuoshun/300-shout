@@ -267,6 +267,16 @@
     删了：能记住的选择才算功能。踩坑：`tk.Menu` 一旦挂在 `root` 上就会`_build()` 时跟着被销毁，
     所以菜单每次现建；`menu.invoke(i)` 可以脱离鼠标直接测，「重建窗口不丢日志」也补了断言。
 
+22. **改** 用户数据目录（v3.4）：配置、基准图、日志统一收进程序根目录下的 `config/`
+    （`config/config.json` + `config/refs/` + `config/logs/`），exe 旁边只留「一个 exe + 一个 config/」。
+    动因：四五个文件摊在桌面上，换 exe 升级时容易漏、也容易被误删；收进一个文件夹后"只换 exe"才真的安全。
+    实现集中在 `paths.py`：`layout()` 决定落点（根目录直接有老版本 `config.json` 且新位置还没配置就沿用老位置，
+    升级后不会突然「未标定」），`dirs_for(config_path)` 让 refs/logs 跟着配置文件走，`ensure_config()` 顺带建目录。
+    CLI/面板/标定全部改走新 API（`main.load_config()` / `main.refs_for_config()` / `calibrate.check_calibration()`）；
+    `--refs-dir` 默认从 `ROOT/refs` 改成 None（跟 config 走）。CI 的 `--add-data` 目标改为 `config`，
+    压缩包直接带一个 `config/` 目录。老坑：测试里曾用 `ROOT/config.json` 读配置，`ensure_config` 会顺手把
+    内置默认值释放到仓库根目录——已改成 `paths_mod.default_config()`，否则每跑一次 pytest 就多一个文件。
+
 ### v2（2026-11-11）
 1. **补齐** `main.py`（入口 + 日志 + 主循环 + `--self-test`）、`calibrate.py`（标定，GUI/离线双模式）、`logsetup.py`
 2. **修** detect 取 `[0][0]` 改为 `res.max()`（ROI 尺寸与基准不一致时不再静默失准）
