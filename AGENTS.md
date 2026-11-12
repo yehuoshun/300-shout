@@ -74,8 +74,23 @@ cd /d/DeepseekWork/300-shout
 ```
 
 动了 CLI 或配置的话再补：`--version`、`--check-guard`，必要时 `--dry-run --frames 30` 冒烟。
-全绿后本地提交（中文，`feat|fix|docs|test|refactor: 简述`，正文写要点和测试数变化）。
-**推送前确认**：除非维护者明确说"推"，默认只提交本地。
+
+## 6.1 提交与推送（铁律）
+
+- 提交信息中文，格式 `范围: 改了什么(为什么)`。范围用模块或主题词：
+  `detect` / `capture` / `guard` / `sender` / `calibrate` / `main` / `ci` / `docs` / `test` / `chore`。
+- **一修改一 push**：每完成一处改动就 `git commit` + `git push origin main`，不许攒着。
+  同时干了多件事要拆成多个 commit 分别推——一个 commit 只说一件事，回溯时才能精确 revert。
+- push 失败（网络 / 凭据 / 远端拒绝）**当场贴出原文错误并停下**，不许静默跳过、不许改成本地攒着。
+- 判断 push 成功不看退出码（PowerShell 5.1 会把 `To github.com:...` 当 NativeCommandError 返回 1）。
+  以 `git status -sb` 显示 `## main...origin/main`（无 `ahead`）或
+  `git log --oneline -1 origin/main` 等于本地 HEAD 为准。
+- 动仓库前先看 `git status` + `git log --oneline -3` + `git remote -v`。
+  **发现工作区有不是自己改的文件，先问，别 `git add -A` 一键全加**（同一仓库可能有并行会话在改）。
+- 只加自己改的具体文件：`git add <path> ...`，不用 `git add -A` 兜底。
+- **禁止**替用户执行 `git reset --hard` / `git checkout -- .` / `git clean -fd` / `git push --force`。
+  需要回退时只做 `git revert`（留痕），或先问。
+- git 操作只在项目目录内做，不跨仓库 `git add`。
 
 ## 7. 文档同步表
 
