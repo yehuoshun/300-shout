@@ -156,7 +156,7 @@
 | `logsetup.py` | ✅ | 日志系统 |
 | `paths.py` | ✅ | 路径规则：源码/exe 两套根目录，`ensure_config` 首次释放默认配置 |
 | `requirements*.txt` | ✅ | 跨平台依赖（Windows 标记） |
-| `tests/test_smoke.py` | ✅ | 65 个离线冒烟测试 |
+| `tests/test_smoke.py` | ✅ | 67 个离线冒烟测试 |
 | `.github/workflows/ci.yml` | ✅ | CI：Linux 启动自检 + Windows 依赖链 |
 | `.github/workflows/release.yml` | ✅ | 推 `v*` tag 打单文件 exe 并发布到 Releases |
 | `README.md` | ✅ | 用户文档（含安全护栏/参数表/排错表） |
@@ -241,6 +241,15 @@
     `fmt_score/status_view/PhraseBook/Session` 这些可测纯函数；界面回调异常被 `_emit` 吞掉并记日志，
     界面炸不影响识别。窗口关闭即 `Session.stop()`，不留后台线程
 
+20. **重做** 面板视觉（v3.2）：Tk 原生控件外观太旧，改为全部自绘——`Card`（圆角卡片，两个矩形+四个圆
+    拼出圆角，比 `smooth` 多边形锐利）、`Well`（卡片内的浅色圆角容器）、`Button`（primary/secondary/quiet
+    三态，含悬停/按下/禁用）、`Pill`（状态胶囊，按文字自适应宽）、`Bar`（带阈值刻度线的进度条）、
+    `Metric`（标题+大数字+条）。配色抽成 `PALETTES["light"/"dark"]` 两套等权，右上角一键切换
+    （切主题整窗重建，比逐个控件换色少很多坑）。字号一律用像素（负数）而非磅，几何按
+    `winfo_fpixels("1i")/96` 缩放，高分屏上文字和圆角不会糊。纯逻辑新增 `status_brief()`：
+    面板用「短标签 + 一句引导」（标签进胶囊，长句单独一行），`status_view()` 保持不变给 CLI 与测试用。
+    踩过的坑：`tk.Text`/`tk.Listbox` 默认 `height=24/10` 行，会把窗口最小高度撑到装不下底栏；
+    `Canvas` 控件的底色要跟着父容器走，否则圆角处会露出灰底。
 ### v2（2026-11-11）
 1. **补齐** `main.py`（入口 + 日志 + 主循环 + `--self-test`）、`calibrate.py`（标定，GUI/离线双模式）、`logsetup.py`
 2. **修** detect 取 `[0][0]` 改为 `res.max()`（ROI 尺寸与基准不一致时不再静默失准）

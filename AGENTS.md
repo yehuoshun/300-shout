@@ -31,7 +31,7 @@
 
 - 解释器只有一个：`.venv/Scripts/python.exe`（仓库内虚拟环境）。
   **裸 `python` 是 Microsoft Store 的桩，退出码 9009**——用它跑脚本会静默失败，文件看起来"没改"。
-- 测试：`./.venv/Scripts/python.exe -m pytest -q`（当前 65 项，要求 < 2 秒）
+- 测试：`./.venv/Scripts/python.exe -m pytest -q`（当前 67 项，要求 < 2 秒）
 - 语法：`./.venv/Scripts/python.exe -m compileall -q .`
 - 自检：`./.venv/Scripts/python.exe main.py --self-test`
 - 依赖：`requirements.txt`（跨平台分段：Windows 装 dxcam/pydirectinput，其它平台自动只装可测部分）+ `requirements-dev.txt`。
@@ -49,7 +49,7 @@
 | `sender.py` | 聊天按键序列（unicode / clipboard 两种输入法） |
 | `calibrate.py` | 标定 + 体检 |
 | `main.py` | 编排：配置、主循环、统计、自检、CLI、组装（`build_runtime`，CLI 与面板共用） |
-| `ui.py` | 展示与下发「开始/停止」：Tkinter 单窗口；顶层不 import tkinter，纯逻辑可离线测 |
+| `ui.py` | 展示与下发「开始/停止」：Tkinter 单窗口，控件自绘（圆角卡片/按钮/进度条）+ 深浅双主题；顶层不 import tkinter，纯逻辑可离线测 |
 
 - **语言**：注释、docstring、日志、提交信息一律中文；标识符英文 `snake_case`。
 - **日志**：`logging.getLogger("300-shout.<模块名>")`，模块内不自己配 handler（统一走 `logsetup`）。

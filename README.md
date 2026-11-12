@@ -53,17 +53,24 @@ flowchart TD
 | 日志 | `logsetup.py` | 控制台 + 文件（`logs/`，2MB 轮转 ×3） |
 | 入口 | `main.py` | 主循环：捕获→检测→守卫→发送 + 日志/统计/热键 |
 
-## 图形面板（v3.1 起，推荐）
+## 图形面板（v3.2 起，推荐）
 
 双击 `300-Shout.exe`（不带参数）直接开控制面板，不用记任何命令行参数：
 
 ![控制面板](docs/ui-panel.png)
 
-- **状态灯**：未标定 / 已停止 / 监控中 / 大招已就绪 / 冷却中，配实时 `ready`、`cd` 分数与阈值
+界面是自绘的卡片式布局（圆角卡片 / 按钮 / 进度条都用标准库 Canvas 画，不引第三方 UI 库），
+右上角一键切深色：
+
+![深色主题](docs/ui-panel-dark.png)
+
+- **状态胶囊 + 一句引导**：未标定 / 已停止 / 启动中 / 监控中 / 待命中 / 冷却中，下面那行直接写「下一步该干什么」
+- **实时分数**：`大招待命 ready` 与 `冷却中 cd` 两个大数字 + 进度条，阈值刻度直接画在条上
 - **一键标定**：点「标定 R 槽」框选游戏里的大招图标，标完自动重新读配置
 - **台词池编辑**：增删台词，直接写回 `config.json`（其余配置键原样保留）
-- **运行日志**：和 `logs/300-shout.log` 同步滚动，不用再去翻文件
+- **运行日志**：和 `logs/300-shout.log` 同步滚动，时间 / 级别 / 内容分色，超过 400 行自动裁旧
 - **发送测试**：单独验一次聊天链路，不用等开大
+- **深浅主题**：右上角「深色 / 浅色」切换，只在内存里换，不写配置、不改文件
 
 关窗即退出，不常驻、不托盘、不开后台服务、不联网——和命令行版是同一条红线。
 想回到纯命令行：`300-Shout.exe --no-ui --dry-run --stats 5`；源码版是
@@ -271,7 +278,7 @@ pip install -r requirements.txt      # Windows 自动带上 dxcam / pydirectinpu
 ```bash
 python -m venv .venv
 .venv/Scripts/python.exe -m pip install -r requirements.txt -r requirements-dev.txt   # Windows
-.venv/Scripts/python.exe -m pytest -q            # 65 个冒烟测试（离线，< 2s）
+.venv/Scripts/python.exe -m pytest -q            # 67 个冒烟测试（离线，< 2s）
 .venv/Scripts/python.exe main.py --self-test     # 端到端启动自检
 ```
 
