@@ -127,7 +127,7 @@ python main.py --self-test     # 离线跑通 配置→ROI→检测→守卫→�
 |------|------|------|
 | `capture.mode` | dxcam / mss | dxcam |
 | `capture.output_idx` | 显示器序号 | 0 |
-| `capture.fps` | 轮询帧率 | 10 |
+| `capture.fps` | 轮询帧率（主循环按此补足间隔，空闲时 CPU 占用很低） | 10 |
 | `roi` | 大招图标屏幕区域（标定自动写入） | - |
 | `detect.threshold` | 可用态相似度阈值 | 0.8 |
 | `detect.lock_seconds` | 触发后防抖锁 | 3.0 |

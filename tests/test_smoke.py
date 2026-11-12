@@ -235,6 +235,27 @@ def test_crop_roi_clamps_out_of_bounds():
     assert sub.shape == (5, 5, 3)
 
 
+def test_run_paces_loop_to_target_fps():
+    """抓帧是非阻塞的：主循环必须按 capture.fps 自己补间隔，否则空转吃满 CPU。"""
+    cfg = main_mod.deep_merge(main_mod.DEFAULT_CFG, {
+        "roi": {"left": 0, "top": 0, "right": 8, "bottom": 8},
+        "phrases": ["台词一"],
+        "capture": {"fps": 10},
+    })
+
+    class _Det:
+        def update(self, icon, now):
+            return False
+
+    slept = []
+    frame = np.zeros((10, 10, 3), dtype=np.uint8)
+    fired = main_mod.run(cfg, main_mod._FakeCapture([frame] * 3), _Det(), None,
+                         clock=lambda: 0.0, sleeper=slept.append, max_frames=3)
+    assert fired == 0
+    assert len(slept) == 3                      # 每帧都补了一次间隔
+    assert all(abs(s - 0.1) < 1e-6 for s in slept)   # fps=10 → 0.1s
+
+
 # ------------------------------------------------------------ 标定（离线）
 def test_calibrate_offline_roundtrip(tmp_path):
     frame = np.random.default_rng(0).integers(0, 255, (200, 200, 3), dtype=np.uint8)

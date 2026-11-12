@@ -237,8 +237,17 @@ def run(cfg: dict, capture, detector, send_fn, *, clock=time.monotonic,
     stop = False
     last_phrase = None
     next_stats = clock() + stats_seconds if stats_seconds else None
+    fps = max(1, _as_int((cfg.get("capture") or {}).get("fps"), 10))
+    frame_interval = 1.0 / fps  # 抓帧是非阻塞的，必须自己补足节奏，否则空转吃满 CPU
+
+    def _pace(started: float) -> None:
+        wait = frame_interval - (clock() - started)
+        if wait > 0:
+            sleeper(wait)
+
     try:
         while not stop and (max_frames is None or frames < max_frames):
+            tick = clock()
             if hotkeys is not None:
                 for key in hotkeys.poll():
                     if key == quit_key:
@@ -259,7 +268,7 @@ def run(cfg: dict, capture, detector, send_fn, *, clock=time.monotonic,
                 if max_empty_frames and empty >= max_empty_frames:
                     log.error("连续 %d 帧抓不到画面，判定捕获异常，退出。", empty)
                     raise SystemExit(3)
-                sleeper(0.05)  # 未就绪帧，跳过
+                _pace(tick)  # 没有新帧也按节奏走，别空转
                 continue
             empty = 0
             frames += 1
@@ -288,6 +297,8 @@ def run(cfg: dict, capture, detector, send_fn, *, clock=time.monotonic,
                 next_stats = clock() + stats_seconds
                 log.info("统计：帧 %d，触发 %d，发送 %d，拦下 %d，空帧 %d%s",
                          frames, triggers, sent, blocked, empty, _score_suffix(detector))
+
+            _pace(tick)  # grab 是非阻塞的，这里补足帧间隔，避免空转吃满 CPU
     except KeyboardInterrupt:
         log.info("收到中断，退出。")
     finally:
@@ -498,7 +509,8 @@ def main(argv=None) -> int:
     for p in problems:
         log.error("配置问题: %s", p)
     if problems:
-        log.error("配置不完整，请先标定（python calibrate.py）后再运行。")
+        log.error("配置检查未通过（%d 项），修好 config.json 再运行；"
+                  "若提示 roi 未标定，先跑 python calibrate.py。", len(problems))
         return 2
 
     from capture import ScreenCapture
