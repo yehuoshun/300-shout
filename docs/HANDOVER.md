@@ -97,7 +97,8 @@
 - **已发版**：v3.0.0（2026-11-12，Release run 43155913157 全绿）→ https://github.com/yehuoshun/300-shout/releases/tag/v3.0.0 ，资产：`300-Shout.exe`（62MB）、`300-Shout.exe.sha256`、`300-Shout-windows-x64.zip`（exe + 默认配置 + 首验清单）。
 - **标定也在 exe 里**：`--calibrate` / `--calibrate-check` 转发到 `calibrate.main()`，
   打包版用户不需要装 Python。`calibrate.py` 自己不再算路径，统一 `from paths import`。
-- **已发版**：v3.1.0（2026-11-12，带图形面板）。exe 从 62MB 涨到约 67MB——面板把 Tk 运行时
+- **已发版**：v3.1.0（2026-11-12，带图形面板）→ https://github.com/yehuoshun/300-shout/releases/tag/v3.1.0 。
+  exe 从 62MB 涨到约 67MB——面板把 Tk 运行时
   （`_tkinter.pyd`、`tcl86t.dll`、`tcl_data/`）一起打了进去。**不需要** `--hidden-import ui`：
   `main._launch_ui()` 里那句函数内 `import ui` 同样会被 PyInstaller 静态分析捕获，本地与 CI 用同一组
   参数即可；验证方式是 `Analysis-00.toc` 里能查到 `ui` / `tkinter` / `_tkinter.pyd`。
