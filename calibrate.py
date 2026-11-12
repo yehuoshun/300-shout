@@ -9,9 +9,15 @@
     # 4. 放大招后在「CD 中」状态回车采集基准
     # → 自动写 refs/ready.png、refs/cd.png 与 config.json 的 roi
 
+体检模式（标定完先跑它，离线、不碰游戏）::
+
+    python calibrate.py --check
+    # 检查 ROI 与基准图尺寸是否一致、区域是否有纹理、两态是否分得开，
+    # 并给出建议阈值。红字（问题）修完再进游戏。
+
 离线模式（无 GUI，供 CI / 预先截好图时使用）::
 
-    python calibrate.py --image shot.png --roi 100,200,64,64 \
+    python calibrate.py --image shot.png --roi 100,200,64,64 \\
         --ready ready.png --cd cd.png
 """
 import argparse
@@ -35,7 +41,7 @@ def save_calibration(config_path: str, roi: dict, ready_img, cd_img=None,
     """写入基准图 + 更新 config.json 的 roi。返回更新后的配置。"""
     os.makedirs(refs_dir, exist_ok=True)
     ready_path = os.path.join(refs_dir, "ready.png")
-    if not cv2.imwrite(ready_path, ready_img):
+    if ready_img is None or not cv2.imwrite(ready_path, ready_img):
         raise IOError(f"写入基准图失败: {ready_path}")
     if cd_img is not None:
         cd_path = os.path.join(refs_dir, "cd.png")
@@ -57,17 +63,126 @@ def _crop(img, roi):
     return img[roi["top"]:roi["bottom"], roi["left"]:roi["right"]]
 
 
+def _score(img, ref) -> float:
+    """同 detect 的打分口径：取响应矩阵最大值，非有限值归零。"""
+    import numpy as np
+    if img is None or ref is None:
+        return 0.0
+    if img.shape[0] < ref.shape[0] or img.shape[1] < ref.shape[1]:
+        return 0.0
+    res = cv2.matchTemplate(img, ref, cv2.TM_CCOEFF_NORMED)
+    if not np.size(res):
+        return 0.0
+    val = float(np.max(res))
+    return val if np.isfinite(val) else float("nan")
+
+
+def check_calibration(config_path: str = DEFAULT_CONFIG,
+                      refs_dir: str = REFS_DIR):
+    """标定体检。返回 ``(ok, lines)``；lines 每条形如 ``"OK/警告/错误: ..."``。"""
+    import main as main_mod
+
+    lines = []
+    problems = 0
+
+    def ok(msg):
+        lines.append(f"OK   : {msg}")
+
+    def warn(msg):
+        nonlocal problems
+        problems += 1
+        lines.append(f"警告 : {msg}")
+
+    def bad(msg):
+        nonlocal problems
+        problems += 2
+        lines.append(f"错误 : {msg}")
+
+    cfg = main_mod.load_config(config_path)
+    roi = cfg.get("roi") or {}
+    roi_w = int(roi.get("right", 0)) - int(roi.get("left", 0))
+    roi_h = int(roi.get("bottom", 0)) - int(roi.get("top", 0))
+    threshold = float((cfg.get("detect") or {}).get("threshold", 0.8))
+    if roi_w <= 0 or roi_h <= 0:
+        bad(f"config.json 的 roi 还没标定（{roi!r}），先跑 python calibrate.py")
+        return False, lines
+    ok(f"ROI = {roi_w}×{roi_h} px，阈值 {threshold}")
+
+    ready_path = os.path.join(refs_dir, "ready.png")
+    cd_path = os.path.join(refs_dir, "cd.png")
+    if not os.path.exists(ready_path):
+        bad(f"缺少可用态基准图: {ready_path}")
+        return False, lines
+    ready = cv2.imread(ready_path, cv2.IMREAD_COLOR)
+    if ready is None:
+        bad(f"基准图读不出来（文件损坏？）: {ready_path}")
+        return False, lines
+
+    if (ready.shape[1], ready.shape[0]) != (roi_w, roi_h):
+        warn(f"基准图尺寸 {ready.shape[1]}×{ready.shape[0]} 与 ROI {roi_w}×{roi_h} 不一致；"
+             f"ROI 改过就要重新标定")
+    else:
+        ok("基准图尺寸与 ROI 一致")
+
+    self_score = _score(ready, ready)
+    import numpy as np
+    if float(np.std(ready.astype(np.float32))) < 1.0:
+        warn("可用态基准图几乎没有纹理（纯色区域）；模板匹配会恒等于 1.0，"
+             "检测将永远不触发。请框选带图标细节的区域重新标定")
+    elif not (self_score == self_score):  # NaN
+        warn("可用态基准图自匹配得分为 NaN（零方差/无纹理区域），"
+             "模板匹配无定义；请重新框选")
+    elif self_score < 0.99:
+        warn(f"基准图自匹配得分只有 {self_score:.3f}，基准图可能已损坏")
+    else:
+        ok("基准图自匹配 1.000（可用于匹配）")
+
+    if not os.path.exists(cd_path):
+        warn("没有 CD 态基准图（可选），检测将只靠阈值判断，抗误判能力弱一些")
+        lines.append(f"建议 : 建议阈值区间 0.70~0.90（当前 {threshold}）")
+        return problems == 0, lines
+
+    cd = cv2.imread(cd_path, cv2.IMREAD_COLOR)
+    if cd is None:
+        bad(f"CD 态基准图读不出来: {cd_path}")
+        return False, lines
+    if cd.shape[:2] != ready.shape[:2]:
+        warn(f"CD 态基准图尺寸 {cd.shape[:2]} 与可用态 {ready.shape[:2]} 不一致")
+
+    cross = _score(cd, ready)   # CD 态画面 vs 可用态基准：越小越好分
+    if not (cross == cross):
+        warn("两态对比得分是 NaN，基准图无纹理，无法评估可分性")
+        return problems == 0, lines
+    ok(f"可用态基准 vs CD 态画面 = {cross:.3f}（越低越好分）")
+    if cross >= threshold:
+        bad(f"两态得分 {cross:.3f} ≥ 阈值 {threshold}，CD 遮罩压不掉相似度；"
+            f"建议把 detect.threshold 调到 {cross + 0.02:.2f} 以上，或重选图标区域")
+    else:
+        margin = 1.0 - cross
+        suggests = round(min(0.95, max(0.5, cross + margin / 2)), 2)
+        lines.append(f"建议 : 两态间距 {margin:.3f}，建议阈值 ≈ {suggests}"
+                     f"（当前 {threshold}）")
+        if threshold <= cross + 0.02:
+            warn("当前阈值太贴近 CD 态得分，容易漏检/误检")
+    return problems == 0, lines
+
+
 # ---------------------------------------------------------------- 交互
 def _grab_screen():
     from capture import ScreenCapture
     cap = ScreenCapture()
-    for _ in range(60):
-        frame = cap.grab()
-        if frame is not None:
-            break
-        import time
-        time.sleep(0.1)
-    return frame
+    try:
+        for _ in range(60):
+            frame = cap.grab()
+            if frame is not None:
+                return frame
+            import time
+            time.sleep(0.1)
+        return None
+    finally:
+        rel = getattr(cap, "release", None)
+        if callable(rel):
+            rel()
 
 
 def _select_roi_gui(frame) -> dict:
@@ -96,7 +211,12 @@ def interactive(config_path: str) -> int:
         cd_img = _crop(_grab_screen(), roi)
 
     save_calibration(config_path, roi, ready_img, cd_img)
-    print("标定完成，可以直接: python main.py")
+    print("标定完成，先体检一次：")
+    _ok, lines = check_calibration(config_path)
+    for line in lines:
+        print("  " + line)
+    print("体检没问题就可以: python main.py --dry-run --stats 30（演练，不真发）")
+    print("确认检测正常后再: python main.py")
     return 0
 
 
@@ -114,10 +234,20 @@ def main(argv=None) -> int:
     ap.add_argument("--ready", help="现成『可用态』基准图路径（离线模式）")
     ap.add_argument("--cd", help="现成『CD 态』基准图路径（可选）")
     ap.add_argument("--refs-dir", default=REFS_DIR, help="基准图输出目录")
+    ap.add_argument("--check", action="store_true",
+                    help="只体检已有标定（不抓屏、不框选）")
     args = ap.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+
+    if args.check:
+        ok, lines = check_calibration(args.config, args.refs_dir)
+        print(f"标定体检（{args.config} / {args.refs_dir}）")
+        for line in lines:
+            print("  " + line)
+        print("结论：可以进游戏" if ok else "结论：先修上面的问题再进游戏")
+        return 0 if ok else 1
 
     # 离线模式：不依赖 GUI / 显示器
     if args.image and args.roi and args.ready:

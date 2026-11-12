@@ -2,3 +2,5 @@ __pycache__/
 logs/
 refs/
 *.pyc
+.venv/
+.pytest_cache/

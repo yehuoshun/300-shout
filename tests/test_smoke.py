@@ -1,6 +1,7 @@
-"""冒烟测试：离线验证 检测逻辑 / 发送按键序列 / 配置 / 标定链路 / 启动自检。
+"""冒烟测试：离线验证 检测 / 发送 / 配置 / 前台守卫 / 热键 / 标定 / 启动自检。
 
-不依赖游戏、不接触显示器或键盘；pydirectinput 通过 FakeKB 注入。
+不依赖游戏、不接触显示器或键盘；pydirectinput 通过 FakeKB 注入，
+热键通过 state_fn 注入，剪贴板通过 setter 注入。
 """
 import json
 import os
@@ -15,6 +16,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 import calibrate as calib_mod  # noqa: E402
+import guard as guard_mod      # noqa: E402
 import main as main_mod        # noqa: E402
 import sender as sender_mod    # noqa: E402
 from detect import CooldownDetector  # noqa: E402
@@ -45,7 +47,7 @@ class FakeKB:
 # ------------------------------------------------------------ detect
 def test_rising_edge_triggers_once():
     ref, cd = tex(1), tex(2)
-    d = CooldownDetector(ref, cd, threshold=0.8, lock_seconds=3.0)
+    d = CooldownDetector(ref, cd, threshold=0.8, lock_seconds=3.0, confirm_frames=1)
     assert d.update(ref, 0.0) is False
     assert d.update(cd, 0.5) is True    # 上升沿
     assert d.update(cd, 0.6) is False   # 防抖锁内
@@ -54,18 +56,49 @@ def test_rising_edge_triggers_once():
 
 def test_no_false_trigger_when_start_in_cd():
     ref, cd = tex(1), tex(2)
-    d = CooldownDetector(ref, cd)
-    assert d.update(cd, 0.0) is False   # 启动首帧即 CD，不应误触发（旧 bug）
+    d = CooldownDetector(ref, cd, confirm_frames=1)
+    assert d.update(cd, 0.0) is False   # 启动首帧即 CD，不应误触发
+
+
+def test_multi_frame_confirm_rejects_single_glitch():
+    """单帧掉下阈值（技能特效/粒子）不应触发；连续两帧才认。"""
+    ref, cd = tex(1), tex(2)
+    d = CooldownDetector(ref, cd, threshold=0.8, lock_seconds=0.0, confirm_frames=2)
+    assert d.update(ref, 0.0) is False
+    assert d.update(ref, 0.1) is False   # 稳定「可用」
+    assert d.update(cd, 0.2) is False    # 单帧噪声：不触发
+    assert d.update(ref, 0.3) is False   # 回稳：计数清零
+    assert d.update(cd, 0.4) is False
+    assert d.update(cd, 0.5) is True     # 连续两帧：触发
+    assert d.status()["is_ready"] is False
 
 
 def test_score_uses_max_not_corner():
-    """ROI 比基准大时，应取最佳匹配（max），而非左上角（旧 bug）。"""
+    """ROI 比基准大时，应取最佳匹配（max），而非左上角。"""
     ref = tex(1, 48, 48)
     canvas = np.random.default_rng(9).integers(0, 255, (128, 128, 3), dtype=np.uint8)
     y, x = 40, 50
     canvas[y:y + 48, x:x + 48] = ref
     d = CooldownDetector(ref, None, threshold=0.9)
     assert d._score(canvas, ref) > 0.99
+
+
+def test_textureless_ref_never_triggers_but_warns(caplog):
+    """纯色基准图（零方差）会让匹配恒为 1.0 → 永远不触发，必须在构造期告警。"""
+    solid = np.full((16, 16, 3), 200, dtype=np.uint8)
+    with caplog.at_level("WARNING"):
+        d = CooldownDetector(solid, None, threshold=0.5, confirm_frames=1)
+    assert any("纹理" in r.getMessage() for r in caplog.records)
+    for i in range(5):
+        assert d.update(solid, float(i)) is False
+
+
+def test_nan_score_degraded_to_zero(monkeypatch):
+    """某些 OpenCV 版本零方差会返回 NaN；NaN 参与比较恒 False，必须按 0 处理。"""
+    d = CooldownDetector(tex(1), None, threshold=0.5)
+    monkeypatch.setattr(d, "_score", lambda icon, ref: float("nan"))
+    assert d._score_checked(tex(1), tex(1)) == 0.0
+    assert d.update(tex(1), 0.0) is False
 
 
 def test_size_mismatch_safe_no_crash():
@@ -106,11 +139,88 @@ def test_plain_send_no_channel():
     assert kb.calls == [("press", "enter"), ("write", "hello"), ("press", "enter")]
 
 
+def test_clipboard_method_pastes_instead_of_typing():
+    kb, pasted = FakeKB(), []
+    sender_mod.send_chat("大招", enter_delay=0, type_delay=0, kb=kb,
+                         input_method="clipboard", clipboard_setter=pasted.append)
+    assert pasted == ["大招"]
+    assert ("write", "大招") not in kb.calls        # 不走逐字注入
+    assert ("keyDown", "ctrl") in kb.calls
+    assert ("press", "v") in kb.calls
+    assert ("keyUp", "ctrl") in kb.calls
+
+
+# ------------------------------------------------------------ 前台守卫
+def test_title_matches_case_insensitive_substring():
+    assert guard_mod.title_matches("300英雄 - 客户端", ["300英雄"])
+    assert guard_mod.title_matches("League of Legends", ["legends"])
+    assert not guard_mod.title_matches("记事本", ["300英雄"])
+
+
+def test_title_matches_fails_closed_on_unknown():
+    """拿不到标题时宁可不喊。"""
+    assert guard_mod.title_matches(None, ["300英雄"]) is False
+    assert guard_mod.title_matches("", ["300英雄"]) is False
+    # 白名单为空 = 不限制
+    assert guard_mod.title_matches(None, []) is True
+
+
+def test_hotkey_watcher_edge_trigger():
+    state = {"f9": True}
+    w = guard_mod.HotkeyWatcher(["f9"], state_fn=lambda vk: state.get("f9", False))
+    assert w.poll() == ["f9"]     # 首次按下
+    assert w.poll() == []         # 按住不重复触发
+    state["f9"] = False
+    assert w.poll() == []
+    state["f9"] = True
+    assert w.poll() == ["f9"]     # 松开再按
+
+
+def test_hotkey_watcher_ignores_unknown_key():
+    w = guard_mod.HotkeyWatcher(["nonsense"], state_fn=lambda vk: True)
+    assert w.unknown == ["nonsense"]
+    assert w.poll() == []
+
+
 # ------------------------------------------------------------ main / config
 def test_config_load_and_validate():
     cfg = main_mod.load_config()
     assert "roi" in cfg and "phrases" in cfg
     assert isinstance(main_mod.validate_config(cfg), list)
+
+
+def test_deep_merge_keeps_defaults():
+    """老 config.json 缺新键时，靠默认值补齐而不是 KeyError。"""
+    merged = main_mod.deep_merge(main_mod.DEFAULT_CFG, {"detect": {"threshold": 0.9}})
+    assert merged["detect"]["threshold"] == 0.9
+    assert merged["detect"]["confirm_frames"] == main_mod.DEFAULT_CFG["detect"]["confirm_frames"]
+    assert merged["chat"]["input_method"] == "unicode"
+    # 不污染默认值
+    assert main_mod.DEFAULT_CFG["detect"]["threshold"] == 0.8
+
+
+def test_validate_config_catches_bad_values():
+    cfg = main_mod.deep_merge(main_mod.DEFAULT_CFG, {})
+    cfg["roi"] = {"left": 0, "top": 0, "right": 0, "bottom": 0}
+    cfg["detect"]["threshold"] = 1.5
+    cfg["phrases"] = []
+    problems = " ".join(main_mod.validate_config(cfg))
+    assert "roi" in problems and "threshold" in problems and "phrases" in problems
+
+
+def test_config_warnings_for_single_phrase_and_method():
+    cfg = main_mod.deep_merge(main_mod.DEFAULT_CFG, {"phrases": ["只剩一条"],
+                                                     "chat": {"input_method": "typo"}})
+    warns = " ".join(main_mod.config_warnings(cfg))
+    assert "1 条" in warns and "input_method" in warns
+
+
+def test_pick_phrase_avoids_immediate_repeat():
+    import random
+    rng = random.Random(0)
+    picks = [main_mod.pick_phrase(rng, ["A", "B"], last="A") for _ in range(20)]
+    assert picks and all(p == "B" for p in picks)   # 只有 B 可选
+    assert main_mod.pick_phrase(rng, ["A"], last="A") == "A"  # 单条只能重复
 
 
 def test_crop_roi():
@@ -119,7 +229,13 @@ def test_crop_roi():
     assert sub.shape == (5, 4, 3)
 
 
-# ------------------------------------------------------------ calibrate（离线）
+def test_crop_roi_clamps_out_of_bounds():
+    frame = np.zeros((10, 10, 3), dtype=np.uint8)
+    sub = main_mod.crop_roi(frame, {"left": 5, "top": 5, "right": 999, "bottom": 999})
+    assert sub.shape == (5, 5, 3)
+
+
+# ------------------------------------------------------------ 标定（离线）
 def test_calibrate_offline_roundtrip(tmp_path):
     frame = np.random.default_rng(0).integers(0, 255, (200, 200, 3), dtype=np.uint8)
     img_path = tmp_path / "shot.png"
@@ -138,6 +254,46 @@ def test_calibrate_offline_roundtrip(tmp_path):
     out = json.loads(cfg_path.read_text(encoding="utf-8"))
     assert out["roi"] == {"left": 20, "top": 10, "right": 84, "bottom": 74}
     assert (refs / "ready.png").exists()
+
+
+def _write_cfg(tmp_path, roi):
+    cfg = main_mod.deep_merge(main_mod.DEFAULT_CFG, {"roi": roi})
+    p = tmp_path / "config.json"
+    p.write_text(json.dumps(cfg), encoding="utf-8")
+    return p
+
+
+def test_check_calibration_passes_on_good_refs(tmp_path):
+    roi = {"left": 10, "top": 10, "right": 58, "bottom": 58}
+    cfg_path = _write_cfg(tmp_path, roi)
+    refs = tmp_path / "refs"
+    refs.mkdir()
+    cv2.imwrite(str(refs / "ready.png"), tex(1))
+    cv2.imwrite(str(refs / "cd.png"), tex(2))
+    ok, lines = calib_mod.check_calibration(str(cfg_path), str(refs))
+    assert ok, "\n".join(lines)
+    assert any("建议阈值" in line for line in lines)
+
+
+def test_check_calibration_flags_textureless_roi(tmp_path):
+    roi = {"left": 10, "top": 10, "right": 58, "bottom": 58}
+    cfg_path = _write_cfg(tmp_path, roi)
+    refs = tmp_path / "refs"
+    refs.mkdir()
+    cv2.imwrite(str(refs / "ready.png"), np.full((48, 48, 3), 120, dtype=np.uint8))
+    ok, lines = calib_mod.check_calibration(str(cfg_path), str(refs))
+    assert not ok
+    assert any("纹理" in line for line in lines)
+
+
+def test_check_calibration_flags_size_mismatch(tmp_path):
+    roi = {"left": 10, "top": 10, "right": 58, "bottom": 58}
+    cfg_path = _write_cfg(tmp_path, roi)
+    refs = tmp_path / "refs"
+    refs.mkdir()
+    cv2.imwrite(str(refs / "ready.png"), tex(1, 32, 32))
+    ok, lines = calib_mod.check_calibration(str(cfg_path), str(refs))
+    assert any("尺寸" in line for line in lines)
 
 
 # ------------------------------------------------------------ 端到端启动自检

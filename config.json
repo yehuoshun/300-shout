@@ -12,18 +12,29 @@
   },
   "detect": {
     "threshold": 0.8,
-    "lock_seconds": 3.0
+    "lock_seconds": 3.0,
+    "confirm_frames": 2
   },
   "chat": {
     "open_key": "enter",
     "channel_keys": [],
     "type_delay": 0.08,
-    "enter_delay": 0.15
+    "enter_delay": 0.15,
+    "input_method": "unicode",
+    "require_foreground": true,
+    "foreground_titles": [
+      "300英雄"
+    ]
   },
   "phrases": [
     "台词一：R键已点燃",
     "台词二：大招伺候"
   ],
   "min_interval": 1.5,
-  "max_interval": 3.0
+  "max_interval": 3.0,
+  "hotkeys": {
+    "pause": "f8",
+    "quit": "f9"
+  },
+  "stats_interval": 60
 }
