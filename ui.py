@@ -35,51 +35,141 @@ COLORS = {
     "bad": "#c8281c",
 }
 
-# 两套配色。键名固定，控件只认这些键，加配色只要再补一个 dict。
-PALETTES = {
-    "light": {
-        "bg": "#eef1f5",
-        "surface": "#ffffff",
-        "surface_alt": "#f6f8fb",
-        "border": "#dde3ec",
-        "border_soft": "#e8edf4",
-        "text": "#111827",
-        "muted": "#6b7280",
-        "faint": "#9aa3af",
-        "accent": "#2f6bff",
-        "accent_hover": "#2457d6",
-        "accent_fg": "#ffffff",
-        "ok": "#12924f",
-        "run": "#2f6bff",
-        "warn": "#b25e09",
-        "bad": "#c8281c",
-        "idle": "#6b7280",
-        "track": "#e7ecf4",
-        "select": "#e8efff",
-        "press": "#eef2fd",
+# 界面风格（v3.3 起可切换）：每套给一份完整配色 + 两个圆角 token。
+# 控件只认 palette 里那 19 个键（键集必须一致，缺一个就会在某个控件上 KeyError），
+# 圆角只影响卡片与按钮的方/圆手感，改风格时不用碰任何绘制代码。
+STYLES = {
+    "simple-light": {
+        "label": "简洁 · 浅色",
+        "hint": "纯色、圆角、克制",
+        "card_radius": 14,
+        "btn_radius": 10,
+        "palette": {
+            "bg": "#eef1f5",
+            "surface": "#ffffff",
+            "surface_alt": "#f6f8fb",
+            "border": "#dde3ec",
+            "border_soft": "#e8edf4",
+            "text": "#111827",
+            "muted": "#6b7280",
+            "faint": "#9aa3af",
+            "accent": "#2f6bff",
+            "accent_hover": "#2457d6",
+            "accent_fg": "#ffffff",
+            "ok": "#12924f",
+            "run": "#2f6bff",
+            "warn": "#b25e09",
+            "bad": "#c8281c",
+            "idle": "#6b7280",
+            "track": "#e7ecf4",
+            "select": "#e8efff",
+            "press": "#eef2fd",
+        },
     },
-    "dark": {
-        "bg": "#0e1116",
-        "surface": "#171b22",
-        "surface_alt": "#1d222b",
-        "border": "#2a3140",
-        "border_soft": "#232935",
-        "text": "#e9edf4",
-        "muted": "#98a2b3",
-        "faint": "#6b7484",
-        "accent": "#5b8cff",
-        "accent_hover": "#7aa2ff",
-        "accent_fg": "#0b1020",
-        "ok": "#38c98a",
-        "run": "#7aa2ff",
-        "warn": "#f0a83c",
-        "bad": "#ff6f66",
-        "idle": "#98a2b3",
-        "track": "#252c38",
-        "select": "#22304d",
-        "press": "#1b2230",
+    "simple-dark": {
+        "label": "简洁 · 深色",
+        "hint": "夜里不刺眼",
+        "card_radius": 14,
+        "btn_radius": 10,
+        "palette": {
+            "bg": "#0e1116",
+            "surface": "#171b22",
+            "surface_alt": "#1d222b",
+            "border": "#2a3140",
+            "border_soft": "#232935",
+            "text": "#e9edf4",
+            "muted": "#98a2b3",
+            "faint": "#6b7484",
+            "accent": "#5b8cff",
+            "accent_hover": "#7aa2ff",
+            "accent_fg": "#0b1020",
+            "ok": "#38c98a",
+            "run": "#7aa2ff",
+            "warn": "#f0a83c",
+            "bad": "#ff6f66",
+            "idle": "#98a2b3",
+            "track": "#252c38",
+            "select": "#22304d",
+            "press": "#1b2230",
+        },
+    },
+    "neon": {
+        "label": "电竞 · 霓虹",
+        "hint": "近黑底 + 青蓝光",
+        "card_radius": 6,
+        "btn_radius": 6,
+        "palette": {
+            "bg": "#08080e",
+            "surface": "#111119",
+            "surface_alt": "#171722",
+            "border": "#26263c",
+            "border_soft": "#1c1c2a",
+            "text": "#eef1ff",
+            "muted": "#9ba2c4",
+            "faint": "#6b7192",
+            "accent": "#2ed3f0",
+            "accent_hover": "#5fe2ff",
+            "accent_fg": "#04121a",
+            "ok": "#2ee6a8",
+            "run": "#5cd1ff",
+            "warn": "#ffc247",
+            "bad": "#ff5f7a",
+            "idle": "#8b90b5",
+            "track": "#1e1e2d",
+            "select": "#14314a",
+            "press": "#191a28",
+        },
+    },
+    "paper": {
+        "label": "纸感 · 米白",
+        "hint": "暖白底 + 墨绿",
+        "card_radius": 18,
+        "btn_radius": 12,
+        "palette": {
+            "bg": "#f1eae0",
+            "surface": "#fdfaf4",
+            "surface_alt": "#f5efe4",
+            "border": "#e6dccb",
+            "border_soft": "#efe7d9",
+            "text": "#2c2721",
+            "muted": "#7c7161",
+            "faint": "#a89d8b",
+            "accent": "#1e5f4d",
+            "accent_hover": "#174a3b",
+            "accent_fg": "#fdfaf4",
+            "ok": "#2b7a52",
+            "run": "#1e5f4d",
+            "warn": "#a2651a",
+            "bad": "#b03b28",
+            "idle": "#8a8070",
+            "track": "#e9e0d1",
+            "select": "#e2ece4",
+            "press": "#ece5d7",
+        },
     },
 }
+
+DEFAULT_STYLE = "simple-light"
+
+# 老代码 / 文档里说的是「配色」，实际就是风格里的 palette，这里留个别名方便引用。
+PALETTES = {key: spec["palette"] for key, spec in STYLES.items()}
+
+
+def resolve_style(name):
+    """认不出来就回落到默认风格（配置文件被手改坏了也不该开不出面板）。"""
+    return name if isinstance(name, str) and name in STYLES else DEFAULT_STYLE
+
+
+def style_label(key) -> str:
+    return STYLES[resolve_style(key)]["label"]
+
+
+def style_from_config(cfg) -> str:
+    """从配置里取 ui.style；缺省 / 类型不对都回落默认。"""
+    ui_cfg = (cfg or {}).get("ui")
+    if not isinstance(ui_cfg, dict):
+        return DEFAULT_STYLE
+    return resolve_style(ui_cfg.get("style"))
 
 
 # ---------------------------------------------------------------- 纯逻辑（可测）
@@ -189,8 +279,11 @@ class PhraseBook:
         return list(self._items)
 
 
-def save_phrases(config_path: str, phrases) -> bool:
-    """只改 config.json 里的 phrases 键，其余原样写回（先写临时文件再替换）。"""
+def _patch_config(config_path: str, patch) -> bool:
+    """读 → 交给 ``patch`` 改 → 写回。只动 patch 碰的键，其余原样保留。
+
+    先写 ``.tmp`` 再 ``os.replace``：中途断电也不会留下半个 config.json。
+    """
     try:
         with open(config_path, encoding="utf-8") as f:
             data = json.load(f)
@@ -198,9 +291,9 @@ def save_phrases(config_path: str, phrases) -> bool:
         log.warning("读不了配置 %s：%s", config_path, exc)
         return False
     if not isinstance(data, dict):
-        log.warning("配置不是 JSON 对象，不改台词：%s", config_path)
+        log.warning("配置不是 JSON 对象，不改：%s", config_path)
         return False
-    data["phrases"] = [str(p) for p in phrases]
+    patch(data)
     tmp = config_path + ".tmp"
     try:
         with open(tmp, "w", encoding="utf-8") as f:
@@ -214,6 +307,28 @@ def save_phrases(config_path: str, phrases) -> bool:
             pass
         return False
     return True
+
+
+def save_phrases(config_path: str, phrases) -> bool:
+    """只改 config.json 里的 phrases 键。"""
+    def patch(data):
+        data["phrases"] = [str(p) for p in phrases]
+
+    return _patch_config(config_path, patch)
+
+
+def save_ui_style(config_path: str, style) -> bool:
+    """只改 config.json 里的 ui.style，其它（含 ui 段里将来的键）原样保留。"""
+    key = resolve_style(style)
+
+    def patch(data):
+        ui_cfg = data.get("ui")
+        if not isinstance(ui_cfg, dict):
+            ui_cfg = {}
+            data["ui"] = ui_cfg
+        ui_cfg["style"] = key
+
+    return _patch_config(config_path, patch)
 
 
 class Session:
@@ -591,7 +706,7 @@ class Panel:
         self.counters = {"frames": 0, "triggers": 0, "sent": 0, "blocked": 0, "errors": 0}
         self.log_lines = []
         self.handler = None
-        self.theme = "light"
+        self.style = style_from_config(self.cfg)
         self._tool = kit()
         self._build()
         self._attach_logging()
@@ -603,7 +718,20 @@ class Panel:
     # -- 比例尺 ----------------------------------------------------
     @property
     def palette(self):
-        return PALETTES[self.theme]
+        return PALETTES[self.style]
+
+    @property
+    def spec(self):
+        return STYLES[self.style]
+
+    @property
+    def r_card(self) -> int:
+        """卡片圆角：风格不同粗细不同（电竞风方、纸感风圆）。"""
+        return self.px(self.spec["card_radius"])
+
+    @property
+    def r_btn(self) -> int:
+        return self.px(self.spec["btn_radius"])
 
     def px(self, value: float) -> int:
         """按屏幕 DPI 放大逻辑像素，高分屏上不至于糊成一小坨。"""
@@ -654,11 +782,13 @@ class Panel:
 
         tools = tk.Frame(head, bg=P["bg"])
         tools.grid(row=0, column=2, rowspan=2, sticky="e")
-        self.btn_theme = K["Button"](tools, P, "深色" if self.theme == "light" else "浅色",
-                                     command=self.toggle_theme, kind="secondary",
+        self._style_var = tk.StringVar(master=self.root, value=self.style)
+        self.btn_style = K["Button"](tools, P, f"外观 · {self.spec['label']}",
+                                     command=self._open_style_menu, kind="secondary",
                                      font_size=self.px(12), height=self.px(30),
-                                     radius=self.px(9), min_width=self.px(62))
-        self.btn_theme.pack(side="right")
+                                     radius=self.px(max(6, self.spec["btn_radius"] - 1)),
+                                     min_width=self.px(124))
+        self.btn_style.pack(side="right")
         self._ver_chip(tools, P, K).pack(side="right", padx=(0, self.px(8)))
 
         # ---- 卡片行：状态 + 台词池 ----
@@ -668,18 +798,18 @@ class Panel:
         cards.columnconfigure(1, weight=1)
         cards.rowconfigure(0, weight=1)
 
-        status_card = K["Card"](cards, P, radius=self.px(14), pad=self.px(18))
+        status_card = K["Card"](cards, P, radius=self.r_card, pad=self.px(18))
         status_card.configure(height=self.px(318))
         status_card.grid(row=0, column=0, sticky="nsew")
         self._build_status_card(status_card.body, K, P)
 
-        phrase_card = K["Card"](cards, P, radius=self.px(14), pad=self.px(18))
+        phrase_card = K["Card"](cards, P, radius=self.r_card, pad=self.px(18))
         phrase_card.configure(height=self.px(318))
         phrase_card.grid(row=0, column=1, sticky="nsew", padx=(self.px(self.GAP), 0))
         self._build_phrase_card(phrase_card.body, K, P)
 
         # ---- 日志卡 ----
-        log_card = K["Card"](root, P, radius=self.px(14), pad=self.px(18))
+        log_card = K["Card"](root, P, radius=self.r_card, pad=self.px(18))
         log_card.grid(row=2, column=0, sticky="nsew")
         self._build_log_card(log_card.body, K, P)
 
@@ -688,26 +818,26 @@ class Panel:
         actions.grid(row=3, column=0, sticky="ew", pady=(self.px(16), 0))
         self.btn_start = K["Button"](actions, P, "开始监控", command=self.on_start,
                                      kind="primary", icon="▶", font_size=self.px(13),
-                                     height=self.px(38), radius=self.px(10),
+                                     height=self.px(38), radius=self.r_btn,
                                      min_width=self.px(132))
         self.btn_start.pack(side="left")
         self.btn_stop = K["Button"](actions, P, "停止", command=self.on_stop,
                                     kind="secondary", icon="■", font_size=self.px(13),
-                                    height=self.px(38), radius=self.px(10),
+                                    height=self.px(38), radius=self.r_btn,
                                     min_width=self.px(96))
         self.btn_stop.pack(side="left", padx=(self.px(8), self.px(16)))
         self.btn_calib = K["Button"](actions, P, "标定 R 槽", command=self.on_calibrate,
                                      kind="secondary", font_size=self.px(13),
-                                     height=self.px(38), radius=self.px(10))
+                                     height=self.px(38), radius=self.r_btn)
         self.btn_check = K["Button"](actions, P, "标定体检", command=self.on_calibrate_check,
                                      kind="secondary", font_size=self.px(13),
-                                     height=self.px(38), radius=self.px(10))
+                                     height=self.px(38), radius=self.r_btn)
         self.btn_test = K["Button"](actions, P, "发送测试", command=self.on_test_send,
                                     kind="secondary", font_size=self.px(13),
-                                    height=self.px(38), radius=self.px(10))
+                                    height=self.px(38), radius=self.r_btn)
         self.btn_cfg = K["Button"](actions, P, "打开配置", command=self.on_open_config,
                                    kind="quiet", font_size=self.px(13),
-                                   height=self.px(38), radius=self.px(10))
+                                   height=self.px(38), radius=self.r_btn)
         for b in (self.btn_calib, self.btn_check, self.btn_test):
             b.pack(side="left", padx=(0, self.px(8)))
         self.btn_cfg.pack(side="left", padx=(self.px(8), 0))
@@ -809,11 +939,11 @@ class Panel:
         self.entry.grid(row=0, column=0, sticky="ew", ipady=self.px(7))
         self.entry.bind("<Return>", lambda _e: self.on_add_phrase())
         K["Button"](row, P, "添加", command=self.on_add_phrase, kind="secondary",
-                    font_size=self.px(12), height=self.px(34), radius=self.px(9),
+                    font_size=self.px(12), height=self.px(34), radius=self.px(max(6, self.spec["btn_radius"] - 1)),
                     surface=True).grid(
             row=0, column=1, padx=(self.px(8), 0))
         K["Button"](row, P, "删除", command=self.on_del_phrase, kind="quiet",
-                    font_size=self.px(12), height=self.px(34), radius=self.px(9),
+                    font_size=self.px(12), height=self.px(34), radius=self.px(max(6, self.spec["btn_radius"] - 1)),
                     surface=True).grid(
             row=0, column=2, padx=(self.px(6), 0))
 
@@ -948,10 +1078,36 @@ class Panel:
             self.log_text.delete("1.0", "end")
             self.log_text.configure(state="disabled")
 
-    def toggle_theme(self):
-        self.theme = "dark" if self.theme == "light" else "light"
+    def _build_style_menu(self):
+        """外观菜单单独建好返回（便于测试：菜单项顺序必须与 STYLES 一致）。"""
+        self._style_var.set(self.style)
+        menu = self.tk.Menu(self.root, tearoff=0)
+        for key, spec in STYLES.items():
+            menu.add_radiobutton(label=f"{spec['label']}   ·   {spec['hint']}", value=key,
+                                 variable=self._style_var,
+                                 command=lambda k=key: self.set_style(k))
+        return menu
+
+    def _open_style_menu(self):
+        """点「外观」弹系统菜单：四套风格单选，选完立刻重建窗口并记进配置。"""
+        menu = self._build_style_menu()
+        x = self.btn_style.winfo_rootx()
+        y = self.btn_style.winfo_rooty() + self.btn_style.winfo_height() + self.px(2)
+        try:
+            menu.tk_popup(x, y)
+        finally:
+            menu.grab_release()
+
+    def set_style(self, key):
+        key = resolve_style(key)
+        if key == self.style:
+            return
+        self.style = key
+        if save_ui_style(self.config_path, key):
+            log.debug("外观已写入配置：%s", key)
         self._build()
         self.refresh()
+        self.append_log(f"外观换成了「{style_label(key)}」。")
 
     # -- 事件泵 ----------------------------------------------------
     def _pump(self):

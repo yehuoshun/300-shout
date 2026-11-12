@@ -689,13 +689,89 @@ def test_status_brief_five_states():
         assert 1 <= len(label) <= 4, "胶囊里的标签要短"
 
 
-def test_both_palettes_cover_same_keys():
-    # 少一个键，切主题时就会 KeyError 或某个控件突然没颜色
-    light, dark = ui_mod.PALETTES["light"], ui_mod.PALETTES["dark"]
-    assert set(light) == set(dark)
-    for name, pal in ui_mod.PALETTES.items():
+def test_every_style_covers_same_palette_keys():
+    # 少一个键，切风格时就会 KeyError 或某个控件突然没颜色
+    assert len(ui_mod.STYLES) >= 2, "至少要有两套风格才谈得上切换"
+    ref = set(ui_mod.STYLES[ui_mod.DEFAULT_STYLE]["palette"])
+    labels = []
+    for name, spec in ui_mod.STYLES.items():
+        pal = spec["palette"]
+        assert set(pal) == ref, f"{name} 的配色键与默认风格不一致"
         for key, value in pal.items():
             assert value.startswith("#") and len(value) == 7, f"{name}.{key} 不是 #rrggbb"
+        assert spec["label"] and spec["label"] not in labels, f"{name} 缺少标签或标签重名"
+        assert spec["card_radius"] > 0 and spec["btn_radius"] > 0
+        labels.append(spec["label"])
+
+
+def test_resolve_style_falls_back_to_default():
+    assert ui_mod.resolve_style("neon") == "neon"
+    assert ui_mod.resolve_style("nope") == ui_mod.DEFAULT_STYLE
+    assert ui_mod.resolve_style(None) == ui_mod.DEFAULT_STYLE
+    assert ui_mod.resolve_style(123) == ui_mod.DEFAULT_STYLE
+    assert ui_mod.style_label("nope") == ui_mod.STYLES[ui_mod.DEFAULT_STYLE]["label"]
+
+
+def test_style_from_config_is_tolerant():
+    assert ui_mod.style_from_config({}) == ui_mod.DEFAULT_STYLE
+    assert ui_mod.style_from_config({"ui": "不是对象"}) == ui_mod.DEFAULT_STYLE
+    assert ui_mod.style_from_config({"ui": {"style": "paper"}}) == "paper"
+    assert ui_mod.style_from_config({"ui": {"style": "不存在"}}) == ui_mod.DEFAULT_STYLE
+
+
+def test_save_ui_style_keeps_other_keys(tmp_path):
+    cfg_path = tmp_path / "config.json"
+    cfg_path.write_text(json.dumps({"phrases": ["别动我"], "ui": {"style": "simple-light",
+                                                                  "将来别的键": 1}},
+                                   ensure_ascii=False), encoding="utf-8")
+    assert ui_mod.save_ui_style(str(cfg_path), "neon") is True
+    data = json.loads(cfg_path.read_text(encoding="utf-8"))
+    assert data["ui"]["style"] == "neon"
+    assert data["ui"]["将来别的键"] == 1, "只改 style，不许把 ui 段其它键冲掉"
+    assert data["phrases"] == ["别动我"]
+    # 认不出来的风格写成默认，而不是把垃圾值塞进配置
+    assert ui_mod.save_ui_style(str(cfg_path), "乱填的") is True
+    assert json.loads(cfg_path.read_text(encoding="utf-8"))["ui"]["style"] == ui_mod.DEFAULT_STYLE
+
+
+def test_panel_style_menu_writes_config(tmp_path):
+    """真窗口才跑（CI 的 ubuntu 没有图形环境会自动跳过）：菜单项与 STYLES 一一对应，
+    选中后写回配置、重建窗口也不许丢日志。"""
+    tk = pytest.importorskip("tkinter")
+    try:
+        tk.Tk().destroy()
+    except Exception:  # noqa: BLE001 无显示环境
+        pytest.skip("没有图形环境")
+    cfg_path = tmp_path / "config.json"
+    cfg_path.write_text(json.dumps({"phrases": ["台词一"],
+                                    "ui": {"style": "simple-light"}},
+                                   ensure_ascii=False), encoding="utf-8")
+    panel = ui_mod.Panel(tk, str(cfg_path))
+    try:
+        panel.append_log("先留一行日志")
+        menu = panel._build_style_menu()
+        keys = list(ui_mod.STYLES)
+        assert menu.index("end") + 1 == len(keys), "菜单项必须与 STYLES 同序同数"
+        menu.invoke(len(keys) - 1)
+        panel.root.update()
+        assert panel.style == keys[-1]
+        assert panel.palette == ui_mod.STYLES[keys[-1]]["palette"]
+        saved = json.loads(cfg_path.read_text(encoding="utf-8"))
+        assert saved["ui"]["style"] == keys[-1]
+        assert saved["phrases"] == ["台词一"]
+        assert any("先留一行日志" in line for line in panel.log_lines), "重建窗口不能丢日志"
+    finally:
+        panel.root.destroy()
+
+
+def test_config_warnings_flags_unknown_ui_style():
+    cfg = main_mod.deep_merge(main_mod.DEFAULT_CFG, {"phrases": ["a", "b"],
+                                                     "ui": {"style": "赛博朋克"}})
+    warns = " ".join(main_mod.config_warnings(cfg))
+    assert "ui.style" in warns and "simple-light" in warns
+    ok = main_mod.deep_merge(main_mod.DEFAULT_CFG, {"phrases": ["a", "b"],
+                                                    "ui": {"style": "neon"}})
+    assert "ui.style" not in " ".join(main_mod.config_warnings(ok))
 
 
 def test_phrase_book_rules():
