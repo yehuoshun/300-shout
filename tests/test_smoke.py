@@ -577,5 +577,13 @@ def test_load_config_asks_ensure_config_first(tmp_path, monkeypatch):
     assert cfg["min_interval"] == 2.5
 
 
+def test_main_dispatches_calibrate_flags(monkeypatch):
+    seen = []
+    monkeypatch.setattr(calib_mod, "main", lambda argv=None: (seen.append(argv), 7)[1])
+    assert main_mod.main(["--calibrate", "--config", "x.json"]) == 7
+    assert main_mod.main(["--calibrate-check", "--config", "y.json"]) == 7
+    assert seen == [["--config", "x.json"], ["--config", "y.json", "--check"]]
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))

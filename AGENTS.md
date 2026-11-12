@@ -30,7 +30,7 @@
 
 - 解释器只有一个：`.venv/Scripts/python.exe`（仓库内虚拟环境）。
   **裸 `python` 是 Microsoft Store 的桩，退出码 9009**——用它跑脚本会静默失败，文件看起来"没改"。
-- 测试：`./.venv/Scripts/python.exe -m pytest -q`（当前 45 项，要求 < 2 秒）
+- 测试：`./.venv/Scripts/python.exe -m pytest -q`（当前 53 项，要求 < 2 秒）
 - 语法：`./.venv/Scripts/python.exe -m compileall -q .`
 - 自检：`./.venv/Scripts/python.exe main.py --self-test`
 - 依赖：`requirements.txt`（跨平台分段：Windows 装 dxcam/pydirectinput，其它平台自动只装可测部分）+ `requirements-dev.txt`。

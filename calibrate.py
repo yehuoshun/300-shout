@@ -103,7 +103,7 @@ def check_calibration(config_path: str = DEFAULT_CONFIG,
     roi_h = int(roi.get("bottom", 0)) - int(roi.get("top", 0))
     threshold = float((cfg.get("detect") or {}).get("threshold", 0.8))
     if roi_w <= 0 or roi_h <= 0:
-        bad(f"config.json 的 roi 还没标定（{roi!r}），先跑 python calibrate.py")
+        bad(f"config.json 的 roi 还没标定（{roi!r}），先跑 --calibrate（源码版：python calibrate.py）")
         return False, lines
     ok(f"ROI = {roi_w}×{roi_h} px，阈值 {threshold}")
 

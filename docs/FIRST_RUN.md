@@ -10,6 +10,10 @@
 
 > 解释器：这台机器上系统的 `python` 是 Microsoft Store 的桩（跑起来直接 9009），
 > 下文所有命令统一用仓库内的 `.venv\Scripts\python.exe`——里面已经装好 cv2 / dxcam / pydirectinput。
+>
+> **用 exe 版（Releases 里的 `300-Shout.exe`）就免装 Python**：把下文的
+> `.venv\Scripts\python.exe main.py` 换成 `300-Shout.exe`，标定那一步换成
+> `300-Shout.exe --calibrate`、`300-Shout.exe --calibrate-check`。判据与期望日志完全一样。
 
 ---
 

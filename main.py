@@ -557,8 +557,20 @@ def main(argv=None) -> int:
                     help="只检查前台窗口是否在白名单里（不发键），首验第 1 步用")
     ap.add_argument("--test-send", metavar="TEXT", default=None,
                     help="真机发送测试：把 TEXT 发到游戏（走同一套守卫/频道逻辑，不抓屏、不用标定）")
+    ap.add_argument("--calibrate", action="store_true",
+                    help="打开标定工具（等价 python calibrate.py）：框选大招图标并采基准图")
+    ap.add_argument("--calibrate-check", action="store_true",
+                    help="标定体检（等价 calibrate.py --check）：尺寸/纹理/两态可分性 + 建议阈值")
     ap.add_argument("--version", action="version", version=f"300-shout {VERSION}")
     args = ap.parse_args(argv)
+
+    # 标定工具也编进了 exe：打包版用户不用再装 Python 就能完成首验第 2 步
+    if args.calibrate or args.calibrate_check:
+        import calibrate
+        calib_argv = ["--config", args.config]
+        if args.calibrate_check:
+            calib_argv.append("--check")
+        return calibrate.main(calib_argv)
 
     if args.list_windows:
         return _print_windows()
@@ -581,7 +593,7 @@ def main(argv=None) -> int:
         log.error("配置问题: %s", p)
     if problems:
         log.error("配置检查未通过（%d 项），修好 config.json 再运行；"
-                  "若提示 roi 未标定，先跑 python calibrate.py。", len(problems))
+                  "若提示 roi 未标定，先跑 --calibrate（源码版：python calibrate.py）。", len(problems))
         return 2
 
     from capture import ScreenCapture

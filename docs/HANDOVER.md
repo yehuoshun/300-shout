@@ -85,6 +85,18 @@
 - `logsetup.setup_logging()`：控制台 + 文件（`logs/300-shout.log`，2MB × 3 轮转）
 - 各模块用 `logging.getLogger("300-shout.<模块>")`，统一挂父 logger
 
+### 3.6 打包与路径
+
+- **发版**：推 `v*` tag（或手动触发）→ `.github/workflows/release.yml` 在 windows-latest 上跑
+  PyInstaller 单文件打包（`--onefile --add-data "config.json;." --collect-submodules dxcam`）→
+  用 `exe --self-test` 冒烟 → 发 Release（附 `.sha256` 与 `windows-x64.zip`）。手动触发只上传 artifact。
+- **路径规则集中在 `paths.py`**：冻结后 `app_root()` = **exe 所在目录**（`config.json` / `refs/` / `logs/`
+  都落这儿），`bundle_dir()` = 解包目录（只读的内置默认配置）；`ensure_config()` 首次运行把内置配置
+  释放到 exe 旁边。原因：onefile 下 `__file__` 指向临时解包目录，进程退出即删——照旧写法会让用户
+  改过的配置"下次启动就丢"。
+- **标定也在 exe 里**：`--calibrate` / `--calibrate-check` 转发到 `calibrate.main()`，
+  打包版用户不需要装 Python。`calibrate.py` 自己不再算路径，统一 `from paths import`。
+
 ## 4. 待办（接手者第一件事）
 
 按顺序做，每步都有可观测的判据（可直接给用户照做的陪跑版：`docs/FIRST_RUN.md`）：
@@ -135,9 +147,11 @@
 | `calibrate.py` | ✅ | 标定工具（GUI + 离线双模式）+ `--check` 体检与建议阈值 |
 | `main.py` | ✅ | 主循环入口 + 日志 + 统计 + 热键 + `--self-test`/`--dry-run`/`--list-windows` |
 | `logsetup.py` | ✅ | 日志系统 |
+| `paths.py` | ✅ | 路径规则：源码/exe 两套根目录，`ensure_config` 首次释放默认配置 |
 | `requirements*.txt` | ✅ | 跨平台依赖（Windows 标记） |
-| `tests/test_smoke.py` | ✅ | 45 个离线冒烟测试 |
+| `tests/test_smoke.py` | ✅ | 53 个离线冒烟测试 |
 | `.github/workflows/ci.yml` | ✅ | CI：Linux 启动自检 + Windows 依赖链 |
+| `.github/workflows/release.yml` | ✅ | 推 `v*` tag 打单文件 exe 并发布到 Releases |
 | `README.md` | ✅ | 用户文档（含安全护栏/参数表/排错表） |
 | `AGENTS.md` | ✅ | 开发约束：红线、分层职责、必跑检查、文档同步表、已知坑 |
 | `docs/FIRST_RUN.md` | ✅ | 真机首验陪跑清单（8 步，每步带判据与失败对照表） |
@@ -149,6 +163,8 @@
 - 建议用仓库内虚拟环境（`.venv/` 已 gitignore）：
   `python -m venv .venv && .venv/Scripts/python.exe -m pip install -r requirements.txt -r requirements-dev.txt`
 - 需管理员权限运行（部分环境输入模拟需要）
+- 打包（可选，发版才用）：`pip install "pyinstaller>=6.6"`，命令与产物规则见 README「自己打包」；
+  CI 用 Python 3.11 打 windows-x64 单文件，产物约 61MB（opencv + numpy 占大头）
 
 ## 8. 联系方式/背景
 
@@ -204,6 +220,12 @@
     前台校验 fail-closed、未标定不发送、非必要不常驻、只用公开抓屏 API）、分层职责边界、
     配置三件套、测试离线化要求、"改完必跑"三条命令、文档同步表、七条已知坑。
     顺带修正 README/HANDOVER 里过期的测试数（28 → 45）与裸 `python` 命令
+16. **修复** 打包成 exe 后配置/日志会丢：新增 `paths.py`（`app_root()`/`bundle_dir()`/`ensure_config()`），
+    `main.load_config()` 首次运行释放内置 `config.json`，`setup_logging` 改用 `LOGS_DIR`。
+    冻结后 `__file__` 在临时解包目录（退出即删），原来那套 `ROOT = dirname(__file__)` 必须换掉
+17. **新增** `.github/workflows/release.yml`：推 `v*` tag 自动 PyInstaller 打单文件 exe、跑 `exe --self-test`、
+    发到 Releases（附 sha256 与 zip）；tag 与 `main.VERSION` 不一致时直接失败
+18. **新增** `--calibrate` / `--calibrate-check`：把标定工具编进 exe，打包版用户不必再装 Python
 
 ### v2（2026-11-11）
 1. **补齐** `main.py`（入口 + 日志 + 主循环 + `--self-test`）、`calibrate.py`（标定，GUI/离线双模式）、`logsetup.py`
