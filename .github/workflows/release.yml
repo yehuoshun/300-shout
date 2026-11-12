@@ -59,6 +59,11 @@ jobs:
           & $exe --self-test
           if ($LASTEXITCODE -ne 0) { Write-Error "self-test 失败（退出码 $LASTEXITCODE）"; exit 1 }
           & $exe --version
+          # 内置默认配置必须被释放到 exe 旁的 config\ 里，--add-data 路径写错时这里才拦得住
+          if (-not (Test-Path "dist\config\config.json")) {
+            Write-Error "首次运行没有生成 dist\config\config.json（--add-data 是否指向 config/config.json？）"
+            exit 1
+          }
 
       - name: 生成校验和与压缩包
         shell: pwsh
